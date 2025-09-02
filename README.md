@@ -49,7 +49,11 @@
     - [Netlify 部署](#netlify-部署)
       - [普通部署（localstorage）](#普通部署localstorage-1)
       - [Upstash Redis 支持](#upstash-redis-支持-1)
-    - [Docker 部署](#docker-部署)
+    - [Docker 部署(目前版本仅为2.7.4)](#docker-部署目前版本仅为274)
+      - [直接运行（最简单，localstorage）](#直接运行最简单localstorage)
+      - [Docker Compose](#docker-compose)
+        - [local storage 存储](#local-storage-存储)
+        - [Upstash 存储](#upstash-存储)
   - [环境变量](#环境变量)
   - [配置说明](#配置说明)
   - [管理员配置](#管理员配置)
@@ -131,9 +135,53 @@
 4. 设置环境变量 NEXT_PUBLIC_STORAGE_TYPE，值为 **upstash**；设置 USERNAME 和 PASSWORD 作为站长账号
 5. 重试部署
 
-### Docker 部署
+### Docker 部署(目前版本仅为2.7.4)
 
-https://github.com/MoonTechLab/LunaTV
+#### 直接运行（最简单，localstorage）
+
+```bash
+# 拉取预构建镜像
+# 或拉取最新版本
+docker pull stardm/startv:latest
+
+# 运行容器
+# -d: 后台运行  -p: 映射端口 3000 -> 3000
+docker run -d --name moontv -p 3000:3000 --env PASSWORD=your_password stardm/startv:latest
+```
+
+#### Docker Compose
+
+##### local storage 存储
+
+```yaml
+services:
+  startv-core:
+    image: stardm/startv:latest
+    container_name: startv-core
+    restart: on-failure
+    ports:
+      - '3000:3000'
+    environment:
+      - PASSWORD=password
+```
+
+##### Upstash 存储
+
+```yaml
+services:
+  startv-core:
+    image: stardm/startv:latest
+    container_name: startv-core
+    restart: on-failure
+    ports:
+      - '3000:3000'
+    environment:
+      - USERNAME=admin
+      - PASSWORD=admin_password
+      - NEXT_PUBLIC_STORAGE_TYPE=upstash
+      - UPSTASH_URL= https 开头的 HTTPS ENDPOINT
+      - UPSTASH_TOKEN= TOKEN
+```
 
 ## 环境变量
 
