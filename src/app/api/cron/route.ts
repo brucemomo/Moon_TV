@@ -64,6 +64,7 @@ async function refreshRecordAndFavorites() {
           source,
           id,
           fallbackTitle: fallbackTitle.trim(),
+          timeout: 30000, // 定时任务使用30秒超时
         })
           .then((detail) => {
             // 成功时才缓存结果

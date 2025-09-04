@@ -22,7 +22,7 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { SearchResult } from '@/lib/types';
-import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
+import { getRequestTimeout,getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
@@ -717,8 +717,9 @@ function PlayPageClient() {
     
         // 2. 发起流式搜索请求
         if (!parsed || parsed.reSearch) {
+          const timeoutSeconds = getRequestTimeout();
           const response = await fetch(
-            `/api/search?q=${encodeURIComponent(query.trim())}`
+            `/api/search?q=${encodeURIComponent(query.trim())}&timeout=${timeoutSeconds}`
           );
           if (!response.ok) throw new Error('搜索失败');
     

@@ -238,14 +238,14 @@ export function cleanHtmlTags(text: string): string {
  */
 export function getRequestTimeout(): number {
   if (typeof window === 'undefined') {
-    return 3; // 服务器端返回默认值
+    return 30; // 服务器端返回默认值
   }
   
   try {
     const savedTimeout = localStorage.getItem('requestTimeout');
     if (savedTimeout) {
       const timeoutSeconds = parseInt(savedTimeout, 10);
-      if (!isNaN(timeoutSeconds) && timeoutSeconds >= 1 && timeoutSeconds <= 30) {
+      if (!isNaN(timeoutSeconds) && timeoutSeconds >= 1 && timeoutSeconds <= 60) {
         return timeoutSeconds;
       }
     }
@@ -253,5 +253,5 @@ export function getRequestTimeout(): number {
     console.warn('Failed to read timeout from localStorage:', error);
   }
   
-  return 3; // 默认3秒
+  return 30; // 默认30秒
 }

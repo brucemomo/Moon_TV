@@ -21,7 +21,7 @@ export default function SourceSelector({
 }: SourceSelectorProps) {
   const [availableSources, setAvailableSources] = useState<{ key: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [timeoutSeconds, setTimeoutSeconds] = useState<number>(3);
+  const [timeoutSeconds, setTimeoutSeconds] = useState<number>(30);
   
   // 由父组件控制是否展开
   const open = openFilter === 'sources';
@@ -211,9 +211,9 @@ export default function SourceSelector({
               <input
                 type="number"
                 min="1"
-                max="30"
+                max="60"
                 value={timeoutSeconds}
-                onChange={(e) => setTimeoutSeconds(Math.max(1, Math.min(30, Number(e.target.value) || 3)))}
+                onChange={(e) => setTimeoutSeconds(Math.max(1, Math.min(60, Number(e.target.value) || 30)))}
                 className="w-12 px-1 py-0.5 text-sm bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400"
                 title="请求超时时间（秒）"
               />

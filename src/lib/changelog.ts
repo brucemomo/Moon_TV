@@ -11,6 +11,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2.7.6",
+    date: "2025-09-04",
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+    "调整搜索超时时间可选范围，及默认值",
+    "添加docker部署支持"
+    ],
+    fixed: [
+    "修复播放中搜索超时时间不生效"
+    ]
+  },
+  {
     version: "2.7.4",
     date: "2025-08-31",
     added: [

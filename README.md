@@ -1,5 +1,7 @@
 # MoonTV(Branch)
 
+原项目地址https://github.com/MoonTechLab/LunaTV
+
 <div align="center">
   <img src="public/logo.png" alt="LibreTV Logo" width="120">
 </div>
@@ -46,7 +48,7 @@
     - [Vercel 部署](#vercel-部署)
       - [普通部署（localstorage）](#普通部署localstorage)
       - [Upstash Redis 支持](#upstash-redis-支持)
-    - [Netlify 部署](#netlify-部署)
+    - [Netlify 部署(推荐)](#netlify-部署推荐)
       - [普通部署（localstorage）](#普通部署localstorage-1)
       - [Upstash Redis 支持](#upstash-redis-支持-1)
     - [Docker 部署(目前版本仅为2.7.4)](#docker-部署目前版本仅为274)
@@ -114,7 +116,7 @@
 4. 设置环境变量 NEXT_PUBLIC_STORAGE_TYPE，值为 **upstash**；设置 USERNAME 和 PASSWORD 作为站长账号
 5. 重试部署
 
-### Netlify 部署
+### Netlify 部署(推荐)
 
 #### 普通部署（localstorage）
 

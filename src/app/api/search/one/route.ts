@@ -9,6 +9,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
   const resourceId = searchParams.get('resourceId');
+  const timeoutParam = searchParams.get('timeout');
+  const timeout = timeoutParam ? parseInt(timeoutParam, 10) * 1000 : undefined; // 转换为毫秒
 
   if (!query || !resourceId) {
     return new Response('缺少必要参数: q 或 resourceId', { status: 400 });
@@ -27,7 +29,7 @@ export async function GET(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const batch of searchFromApiStream(targetSite, query)) {
+        for await (const batch of searchFromApiStream(targetSite, query, true, timeout)) {
           // 过滤黄词
           let result = batch;
           if (!config.SiteConfig.DisableYellowFilter) {

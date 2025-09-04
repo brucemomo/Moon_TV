@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q')?.trim();
+    const timeoutParam = searchParams.get('timeout');
+    const timeout = timeoutParam ? parseInt(timeoutParam, 10) * 1000 : undefined; // 转换为毫秒
 
     if (!query) {
       return NextResponse.json({ suggestions: [] });
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest) {
       async start(controller) {
         const encoder = new TextEncoder();
 
-        const suggestionsStream = generateSuggestionsStream(query);
+        const suggestionsStream = generateSuggestionsStream(query, timeout);
 
         for await (const suggestions of suggestionsStream) {
           controller.enqueue(
@@ -65,7 +67,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function* generateSuggestionsStream(query: string) {
+async function* generateSuggestionsStream(query: string, timeout?: number) {
   const queryLower = query.toLowerCase();
   const config = await getConfig();
   const apiSites = config.SourceConfig.filter((site: any) => !site.disabled);
@@ -74,7 +76,7 @@ async function* generateSuggestionsStream(query: string) {
     // 取第一个可用的数据源进行流式搜索
     const firstSite = apiSites[0];
 
-    for await (const results of searchFromApiStream(firstSite, query)) {
+    for await (const results of searchFromApiStream(firstSite, query, true, timeout)) {
       const realKeywords: string[] = Array.from(
         new Set(
           results
