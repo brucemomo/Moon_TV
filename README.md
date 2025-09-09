@@ -28,7 +28,7 @@
 - ❤️ **收藏 + 继续观看**：支持 Redis/Upstash 存储，多端同步进度。
 - 📱 **PWA**：离线缓存、安装到桌面/主屏，移动端原生体验。
 - 🌗 **响应式布局**：桌面侧边栏 + 移动底部导航，自适应各种屏幕尺寸。
-- 🚀 **极简部署**：一条 Docker 命令即可将完整服务跑起来，或免费部署到 Vercel、Netlify。
+- 🚀 **极简部署**：一条 Docker 命令即可将完整服务跑起来，或免费部署到 Vercel、Netlify、cloudflare。
 - 👿 **智能去广告**：自动跳过视频中的切片广告（实验性）
 
 <details>
@@ -51,6 +51,9 @@
     - [Netlify 部署(推荐)](#netlify-部署推荐)
       - [普通部署（localstorage）](#普通部署localstorage-1)
       - [Upstash Redis 支持](#upstash-redis-支持-1)
+    - [Cloudflare 部署](#cloudflare-部署)
+      - [普通部署（localstorage）](#普通部署localstorage-2)
+      - [D1 支持](#d1-支持)
     - [Docker 部署(目前版本仅为2.7.4)](#docker-部署目前版本仅为274)
       - [直接运行（最简单，localstorage）](#直接运行最简单localstorage)
       - [Docker Compose](#docker-compose)
@@ -81,14 +84,16 @@
 
 ## 部署
 
-本项目**支持 Vercel、Docker、Netlify** 部署。
+本项目**支持 Vercel、Docker、Netlify、Cloudflare** 部署。
 
 存储支持矩阵
 
-|                   | Docker | Vercel | Netlify |
-| :---------------: | :----: | :----: | :-----: |
-|    原生 redis     |   ✅   |        |         |
-|   Upstash Redis   |   ☑️   |   ✅   |   ✅    |
+|               | Docker | Vercel | Cloudflare |
+| :-----------: | :----: | :----: | :--------: |
+| localstorage  |   ✅   |   ✅   |     ✅     |
+|  原生 redis   |   ✅   |        |            |
+| Cloudflare D1 |        |        |     ✅     |
+| Upstash Redis |   ☑️   |   ✅   |     ✅     |
 
 ✅：经测试支持
 
@@ -135,6 +140,30 @@
 2. 复制新数据库的 **HTTPS ENDPOINT 和 TOKEN**
 3. 返回你的 Netlify 项目，**Project Configuration → Environment variables** 新增环境变量 **UPSTASH_URL 和 UPSTASH_TOKEN**，值为第二步复制的 endpoint 和 token
 4. 设置环境变量 NEXT_PUBLIC_STORAGE_TYPE，值为 **upstash**；设置 USERNAME 和 PASSWORD 作为站长账号
+5. 重试部署
+
+### Cloudflare 部署
+
+**Cloudflare Pages 的环境变量尽量设置为密钥而非文本**
+
+#### 普通部署（localstorage）
+
+1. **Fork** 本仓库到你的 GitHub 账户。
+2. 登陆 [Cloudflare](https://cloudflare.com)，点击 **计算（Workers）-> Workers 和 Pages**，点击创建
+3. 选择 Pages，导入现有的 Git 存储库，选择 Fork 后的仓库
+4. 构建命令填写 **pnpm run pages:build**，预设框架为无，**构建输出目录**为 `.vercel/output/static`
+5. 保持默认设置完成首次部署。进入设置，将兼容性标志设置为 `nodejs_compat`，无需选择，直接粘贴
+6. 首次部署完成后进入设置，新增 PASSWORD 密钥（变量和机密下），而后重试部署。
+7. 如需自定义 `config.json`，请直接修改 Fork 后仓库中该文件。
+8. 每次 Push 到 `main` 分支将自动触发重新构建。
+
+#### D1 支持
+
+0. 完成普通部署并成功访问
+1. 点击 **存储和数据库 -> D1 SQL 数据库**，创建一个新的数据库，名称随意
+2. 进入刚创建的数据库，点击左上角的 Explore Data，将[d1-init](d1-init.sql) 中的内容粘贴到 Query 窗口后点击 **Run All**，等待运行完成
+3. 返回你的 pages 项目，进入 **设置 -> 绑定**，添加绑定 D1 数据库，选择你刚创建的数据库，变量名称填 **DB**
+4. 设置环境变量 NEXT_PUBLIC_STORAGE_TYPE，值为 **d1**；设置 USERNAME 和 PASSWORD 作为站长账号
 5. 重试部署
 
 ### Docker 部署(目前版本仅为2.7.4)

@@ -11,6 +11,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "2.8.0",
+    date: "2025-09-09",
+    added: [
+    "添加cf部署",
+    "添加d1支持"
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+      // 无修复内容
+    ]
+  },
+  {
     version: "2.7.6",
     date: "2025-09-04",
     added: [

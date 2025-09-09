@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 
 import { getConfig } from '@/lib/config';
 
+export const runtime = 'edge';
+
 export async function GET(request: NextRequest) {
   try {
     const config = await getConfig();

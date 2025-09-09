@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 /* eslint-disable @typescript-eslint/no-var-requires */
+
 const nextConfig = {
   output: 'standalone',
   eslint: {
@@ -63,6 +64,12 @@ const nextConfig = {
     return config;
   },
 };
+
+// Setup Cloudflare Pages development platform in development mode
+if (process.env.NODE_ENV === 'development') {
+  const { setupDevPlatform } = require('@cloudflare/next-on-pages/next-dev');
+  setupDevPlatform();
+}
 
 const withPWA = require('next-pwa')({
   dest: 'public',
