@@ -1,9 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment, @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps, no-console, @next/next/no-img-element */
 
 'use client';
-
-import Artplayer from 'artplayer';
-import Hls from 'hls.js';
 import { Heart } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
@@ -112,7 +109,7 @@ function PlayPageClient() {
   const [searchType] = useState(searchParams.get('stype') || '');
 
   // 是否需要优选
-  const [needPrefer, setNeedPrefer] = useState(
+  const [needPrefer, _setNeedPrefer] = useState(
     searchParams.get('prefer') === 'true'
   );
   const needPreferRef = useRef(needPrefer);
@@ -602,35 +599,7 @@ function PlayPageClient() {
     }
   };
 
-  class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
-    constructor(config: any) {
-      super(config);
-      const load = this.load.bind(this);
-      this.load = function (context: any, config: any, callbacks: any) {
-        // 拦截manifest和level请求
-        if (
-          (context as any).type === 'manifest' ||
-          (context as any).type === 'level'
-        ) {
-          const onSuccess = callbacks.onSuccess;
-          callbacks.onSuccess = function (
-            response: any,
-            stats: any,
-            context: any
-          ) {
-            // 如果是m3u8文件，处理内容以移除广告分段
-            if (response.data && typeof response.data === 'string') {
-              // 过滤掉广告段 - 实现更精确的广告过滤逻辑
-              response.data = filterAdsFromM3U8(response.data);
-            }
-            return onSuccess(response, stats, context, null);
-          };
-        }
-        // 执行原始load方法
-        load(context, config, callbacks);
-      };
-    }
-  }
+  // 注意：自定义 HLS Loader 会在确保 Hls 动态加载成功后再定义
 
   // 当集数索引变化时自动更新视频地址
   useEffect(() => {
@@ -639,36 +608,7 @@ function PlayPageClient() {
 
   // 进入页面时直接获取全部源信息
   useEffect(() => {
-    const fetchSourceDetail = async (
-      source: string,
-      id: string
-    ): Promise<SearchResult[]> => {
-      try {
-        const detailResponse = await fetch(
-          `/api/detail?source=${source}&id=${id}`
-        );
-        if (!detailResponse.ok) {
-          throw new Error('获取视频详情失败');
-        }
-        const detailData = (await detailResponse.json()) as SearchResult;
-        setAvailableSources([detailData]);
-        return [detailData];
-      } catch (err) {
-        console.error('获取视频详情失败:', err);
-        return [];
-      } finally {
-        setSourceSearchLoading(false);
-      }
-    };
-
-    const CACHE_KEY_PREFIX = 'search_cache_';
-    const CACHE_TTL = 1000 * 60 * 180; // 缓存 180 分钟
-    
-    interface CachedResult {
-      timestamp: number;
-      reSearch: boolean;
-      results: SearchResult[];
-    }
+    // 已不再使用的函数移除（避免 SSR 与 linter 报错）
     
     const fetchSourcesData = async (
       query: string,
@@ -676,139 +616,80 @@ function PlayPageClient() {
     ): Promise<SearchResult[]> => {
       setSourceSearchLoading(true);
       setSourceSearchError('');
-
-      // 清理过期缓存
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(CACHE_KEY_PREFIX)) {
-          const cachedItem = localStorage.getItem(key);
-          if (cachedItem) {
-            try {
-              const parsedItem = JSON.parse(cachedItem) as CachedResult;
-              if (Date.now() - parsedItem.timestamp >= CACHE_TTL) {
-                localStorage.removeItem(key); // 删除过期缓存
-              }
-            } catch (e) {
-              // 如果解析失败也删除
-              localStorage.removeItem(key);
-            }
-          }
-        }
-      }
     
-      // 生成更唯一的缓存键，避免影片名字相同时的缓存冲突
-      const cacheKey = `${CACHE_KEY_PREFIX}${query.trim().toLowerCase()}_${videoYearRef.current || ''}_${searchType || ''}`;
-      let aggregatedResults: SearchResult[] = [];
+      const aggregatedResults: SearchResult[] = [];
     
-      // 提前声明
-      let parsed: CachedResult | null = null;
-    
-      try {
-        // 1. 读取缓存
-        const cached = localStorage.getItem(cacheKey);
-    
-        if (cached) {
-          parsed = JSON.parse(cached) as CachedResult;
-          aggregatedResults = [...parsed.results];
-          setAvailableSources(aggregatedResults);
-          setSourceSearchLoading(false);
-          onResult?.(parsed.results);
-        }
-    
-        // 2. 发起流式搜索请求
-        if (!parsed || parsed.reSearch) {
-          const timeoutSeconds = getRequestTimeout();
-          const response = await fetch(
-            `/api/search?q=${encodeURIComponent(query.trim())}&timeout=${timeoutSeconds}`
-          );
-          if (!response.ok) throw new Error('搜索失败');
-    
-          const reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
-            response.body?.getReader();
-          if (!reader) throw new Error('无法读取搜索流');
-    
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let done = false;
-    
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            done = readerDone;
-    
-            if (value) {
-              buffer += decoder.decode(value, { stream: true });
-              const lines: string[] = buffer.split('\n');
-              buffer = lines.pop() || '';
-    
-              for (const line of lines) {
-                if (!line.trim()) continue;
-    
-                try {
-                  const data = JSON.parse(line) as { pageResults?: SearchResult[] };
-                  if (data.pageResults) {
-                    const filteredResults: SearchResult[] = data.pageResults.filter(
-                      (r: SearchResult) => {
-                        const titleMatch =
-                          r.title.trim().replace(/\s+/g, ' ').toLowerCase() ===
-                          videoTitleRef.current.trim().replace(/\s+/g, ' ').toLowerCase();
-                        const yearMatch = videoYearRef.current
-                          ? r.year.toLowerCase() ===
-                            videoYearRef.current.toLowerCase()
-                          : true;
-                        const typeMatch = searchType
-                          ? (searchType === 'tv' && r.episodes.length > 1) ||
-                            (searchType === 'movie' && r.episodes.length === 1)
-                          : true;
-                        return titleMatch && yearMatch && typeMatch;
-                      }
+      try {    
+        // 发起流式搜索请求
+        const timeoutSeconds = getRequestTimeout();
+        const response = await fetch(
+          `/api/search?q=${encodeURIComponent(query.trim())}&timeout=${timeoutSeconds}`
+        );
+        if (!response.ok) throw new Error('搜索失败');
+  
+        const reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
+          response.body?.getReader();
+        if (!reader) throw new Error('无法读取搜索流');
+  
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let done = false;
+  
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+  
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+            const lines: string[] = buffer.split('\n');
+            buffer = lines.pop() || '';
+  
+            for (const line of lines) {
+              if (!line.trim()) continue;
+  
+              try {
+                const data = JSON.parse(line) as { pageResults?: SearchResult[] };
+                if (data.pageResults) {
+                  const filteredResults: SearchResult[] = data.pageResults.filter(
+                    (r: SearchResult) => {
+                      const titleMatch =
+                        r.title.trim().replace(/\s+/g, ' ').toLowerCase() ===
+                        videoTitleRef.current.trim().replace(/\s+/g, ' ').toLowerCase();
+                      const yearMatch = videoYearRef.current
+                        ? r.year.toLowerCase() ===
+                          videoYearRef.current.toLowerCase()
+                        : true;
+                      const typeMatch = searchType
+                        ? (searchType === 'tv' && r.episodes.length > 1) ||
+                          (searchType === 'movie' && r.episodes.length === 1)
+                        : true;
+                      return titleMatch && yearMatch && typeMatch;
+                    }
+                  );
+  
+                  if (filteredResults.length > 0) {
+                    const newOnes = filteredResults.filter(
+                      (r) =>
+                        !aggregatedResults.some(
+                          (item) => item.source === r.source && item.id === r.id
+                        )
                     );
-    
-                    if (filteredResults.length > 0) {
-                      const newOnes = filteredResults.filter(
-                        (r) =>
-                          !aggregatedResults.some(
-                            (item) => item.source === r.source && item.id === r.id
-                          )
-                      );
-    
-                      if (newOnes.length > 0) {
-                        aggregatedResults.push(...newOnes);
-                        setAvailableSources([...aggregatedResults]);
-                        setSourceSearchLoading(false);
-                        onResult?.(newOnes);
-    
-                        // 每次新增就更新缓存
-                        parsed = {
-                          timestamp: Date.now(),
-                          reSearch: true,
-                          results: aggregatedResults,
-                        };
-                        localStorage.setItem(cacheKey, JSON.stringify(parsed));
-                      }
+  
+                    if (newOnes.length > 0) {
+                      aggregatedResults.push(...newOnes);
+                      setAvailableSources([...aggregatedResults]);
+                      setSourceSearchLoading(false);
+                      onResult?.(newOnes);
                     }
                   }
-                } catch (err) {
-                  console.warn('解析行 JSON 失败:', err);
                 }
+              } catch (err) {
+                console.warn('解析行 JSON 失败:', err);
               }
             }
           }
-        } else {
-          setSourceSearchLoading(false);
-          return aggregatedResults;
         }
-    
         setSourceSearchLoading(false);
-    
-        // 最终缓存结果 - 只有当有结果时才缓存
-        if (aggregatedResults.length > 0) {
-          parsed = {
-            timestamp: Date.now(),
-            reSearch: false,
-            results: aggregatedResults,
-          };
-          localStorage.setItem(cacheKey, JSON.stringify(parsed));
-        }
     
         return aggregatedResults;
       } catch (err) {
@@ -818,7 +699,35 @@ function PlayPageClient() {
       }
     };
     
+    /**
+      * 初始化播放数据
+      */
+    function initDetail(detailData: SearchResult) {
+      setCurrentSource(detailData.source);
+      setCurrentId(detailData.id);
+      setVideoYear(detailData.year);
+      setVideoTitle(detailData.title || videoTitleRef.current);
+      setVideoCover(detailData.poster);
+      setVideoDoubanId(detailData.douban_id || 0);
+      setDetail(detailData);
     
+      if (currentEpisodeIndex >= detailData.episodes.length) {
+        setCurrentEpisodeIndex(0);
+      }
+    
+      // 规范 URL 参数
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('source', detailData.source);
+      newUrl.searchParams.set('id', detailData.id);
+      newUrl.searchParams.set('year', detailData.year);
+      newUrl.searchParams.set('title', detailData.title);
+      newUrl.searchParams.delete('prefer');
+      window.history.replaceState({}, '', newUrl.toString());
+    
+      setLoadingStage('ready');
+      setLoadingMessage('✨ 准备就绪，即将开始播放...');
+      setTimeout(() => setLoading(false), 500);
+    }
 
     const initAll = async () => {
       if (!currentSource && !currentId && !videoTitle && !searchTitle) {
@@ -834,63 +743,36 @@ function PlayPageClient() {
           ? '🎬 正在获取视频详情...'
           : '🔍 正在搜索播放源...'
       );
-    
-      let started = false; // 是否已经开始播放
-    
-      const results = await fetchSourcesData(videoTitle, (newResults) => {
-        if (!started && newResults.length > 0) {
-          started = true;
-
-          let detailData = null;
-          // 从缓存中读取当前源和 ID
-          const cachedSource = localStorage.getItem('currentSource');
-          const cachedId = localStorage.getItem('currentId');
-
-          // 如果缓存存在，就优先找这个源
-          if (cachedSource && cachedId) {
-            detailData = newResults.find(
-              (item) => item.source === cachedSource && item.id === cachedId
-            ) || null;
+      let detailData: SearchResult | null = null;
+      let allResults: SearchResult[] = [];
+      
+      await fetchSourcesData(videoTitle, (newResults) => {
+        allResults = [...allResults, ...newResults];
+      
+        // 如果还没确定 detailData，就尝试找目标源
+        if (!detailData && currentSource && currentId) {
+          const match = newResults.find(
+            (item) => item.source === currentSource && item.id === currentId
+          );
+          if (match) {
+            detailData = match;
+            initDetail(detailData);
           }
-
-          // 如果没找到，就退回到第一个源
-          if (!detailData) {
-            detailData = newResults[0];
-          }
-    
-          setCurrentSource(detailData.source);
-          setCurrentId(detailData.id);
-          setVideoYear(detailData.year);
-          setVideoTitle(detailData.title || videoTitleRef.current);
-          setVideoCover(detailData.poster);
-          setVideoDoubanId(detailData.douban_id || 0);
-          setDetail(detailData);
-    
-          if (currentEpisodeIndex >= detailData.episodes.length) {
-            setCurrentEpisodeIndex(0);
-          }
-    
-          // 规范URL参数
-          const newUrl = new URL(window.location.href);
-          newUrl.searchParams.set('source', detailData.source);
-          newUrl.searchParams.set('id', detailData.id);
-          newUrl.searchParams.set('year', detailData.year);
-          newUrl.searchParams.set('title', detailData.title);
-          newUrl.searchParams.delete('prefer');
-          window.history.replaceState({}, '', newUrl.toString());
-    
-          setLoadingStage('ready');
-          setLoadingMessage('✨ 准备就绪，即将开始播放...');
-          setTimeout(() => setLoading(false), 500);
         }
       });
-
-      // 如果没有找到匹配结果，设置错误状态
-      if (!started && results.length === 0) {
+      
+      // 流式搜索结束：如果目标源没找到，就 fallback
+      if (!detailData && allResults.length > 0) {
+        detailData = allResults[0];
+        initDetail(detailData);
+      }
+      
+      // 完全没结果
+      if (!detailData) {
         setError('未找到匹配结果');
         setLoading(false);
       }
-    };    
+    }
     
     initAll();
     
@@ -953,9 +835,6 @@ function PlayPageClient() {
     newTitle: string
   ) => {
     try {
-      // 保存当前源和 ID 到缓存
-      localStorage.setItem('currentSource', newSource);
-      localStorage.setItem('currentId', newId);
       // 显示换源加载状态
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
@@ -1341,15 +1220,37 @@ function PlayPageClient() {
     }
   };
 
+  // 动态加载播放器相关库，仅在客户端
+  const artLibRef = useRef<any>(null);
+  const hlsLibRef = useRef<any>(null);
+  const [libsReady, setLibsReady] = useState(false);
+
   useEffect(() => {
-    if (
-      !Artplayer ||
-      !Hls ||
-      !videoUrl ||
-      loading ||
-      currentEpisodeIndex === null ||
-      !artRef.current
-    ) {
+    let mounted = true;
+    (async () => {
+      try {
+        const [{ default: Art }, { default: Hls }] = await Promise.all([
+          import('artplayer'),
+          import('hls.js'),
+        ]);
+        if (!mounted) return;
+        artLibRef.current = Art;
+        hlsLibRef.current = Hls;
+        setLibsReady(true);
+      } catch (err) {
+        console.error('加载播放器库失败:', err);
+        setLibsReady(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const Artplayer = artLibRef.current;
+    const Hls = hlsLibRef.current;
+    if (!libsReady || !Artplayer || !Hls || !videoUrl || loading || currentEpisodeIndex === null || !artRef.current) {
       return;
     }
 
@@ -1400,6 +1301,26 @@ function PlayPageClient() {
       // 创建新的播放器实例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
       Artplayer.USE_RAF = true;
+
+      // 在这里定义自定义 Loader，确保 Hls 已就绪
+      class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
+        constructor(config: any) {
+          super(config);
+          const load = this.load.bind(this);
+          this.load = function (context: any, config: any, callbacks: any) {
+            if ((context as any).type === 'manifest' || (context as any).type === 'level') {
+              const onSuccess = callbacks.onSuccess;
+              callbacks.onSuccess = function (response: any, stats: any, context: any) {
+                if (response.data && typeof response.data === 'string') {
+                  response.data = filterAdsFromM3U8(response.data);
+                }
+                return onSuccess(response, stats, context, null);
+              };
+            }
+            load(context, config, callbacks);
+          };
+        }
+      }
 
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
@@ -1457,9 +1378,7 @@ function PlayPageClient() {
               maxBufferSize: 60 * 1000 * 1000, // 约 60MB，超出后触发清理
 
               /* 自定义loader */
-              loader: blockAdEnabledRef.current
-                ? CustomHlsJsLoader
-                : Hls.DefaultConfig.loader,
+              loader: blockAdEnabledRef.current ? CustomHlsJsLoader : Hls.DefaultConfig.loader,
             });
 
             hls.loadSource(url);
@@ -1524,7 +1443,7 @@ function PlayPageClient() {
             name: '跳过片头片尾',
             html: '跳过片头片尾',
             switch: skipConfigRef.current.enable,
-            onSwitch: function (item) {
+            onSwitch: function (item: any) {
               const newConfig = {
                 ...skipConfigRef.current,
                 enable: !item.switch,
@@ -1766,7 +1685,7 @@ function PlayPageClient() {
       console.error('创建播放器失败:', err);
       setError('播放器初始化失败');
     }
-  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
+  }, [libsReady, videoUrl, loading, blockAdEnabled, currentEpisodeIndex, detail]);
 
   // 当组件卸载时清理定时器、Wake Lock 和播放器资源
   useEffect(() => {

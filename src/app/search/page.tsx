@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps, @typescript-eslint/no-explicit-any */
 'use client';
 
-import { ChevronUp, RotateCcw, Search, X } from 'lucide-react';
+import { ChevronUp, Search, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useMemo } from 'react';
 import { useEffect,useRef, useState } from 'react';
@@ -38,6 +38,7 @@ function SearchPageClient() {
   const [failedSources, setFailedSources] = useState<{ name: string; key: string; error: string }[]>([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<string | null>(null);
   const historyRef = useRef<HTMLDivElement>(null);
+  const [hasResetOnEmptyParams, setHasResetOnEmptyParams] = useState(true);
 
   // 筛选状态 - 从 URL 参数初始化，如果没有URL参数则从保存的源读取
   const [searchSources, setSearchSources] = useState<string[]>(() => {
@@ -156,63 +157,72 @@ function SearchPageClient() {
       .filter(([_, group]) => group.length > 0);
   }, [aggregatedResults, filterSources, selectedTitles, selectedYears]);
 
-  // 对聚合结果进行排序（支持：源数量、年份、集数；升序/降序）。保留“标题包含关键字”的结果优先。
-  const sortedAggregatedResults: [string, SearchResult[]][] = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const isExact = (group: SearchResult[]) => group[0].title.toLowerCase().includes(query);
-    const getYearValue = (group: SearchResult[]) => {
-      const y = group[0].year;
-      if (!y || y === 'unknown') return null;
-      const n = Number(y);
-      return Number.isNaN(n) ? null : n;
-    };
-    const getSourcesCount = (group: SearchResult[]) => group.length;
-    const getEpisodesCount = (group: SearchResult[]) => {
-      let maxEpisodes = 0;
-      for (const item of group) {
-        const count = Array.isArray(item.episodes) ? item.episodes.length : 0;
-        if (count > maxEpisodes) maxEpisodes = count;
-      }
-      return maxEpisodes;
-    };
+// 返回两个数组：exact 和 others
+const sortedAggregatedResults: { exact: [string, SearchResult[]][], others: [string, SearchResult[]][] } = useMemo(() => {
+  const aggregateMode = viewMode;
+  const groups: [string, SearchResult[]][] = aggregateMode
+    ? filteredAggregatedResults
+    : searchResults.map(item => [
+        `${item.title}-${item.year}-${item.source_name}`,
+        [item],
+      ]);
 
-    const valueOf = (group: SearchResult[]) => {
-      switch (sortField) {
-        case 'sources':
-          return getSourcesCount(group);
-        case 'episodes':
-          return getEpisodesCount(group);
-        case 'year':
-        default:
-          return getYearValue(group);
-      }
-    };
+  const query = (searchParams.get('q') ?? '').trim().toLowerCase();
+  const isExact = (group: SearchResult[]) => group[0].title.toLowerCase().includes(query);
 
-    const compare = (a: [string, SearchResult[]], b: [string, SearchResult[]]) => {
-      const aVal = valueOf(a[1]);
-      const bVal = valueOf(b[1]);
+  const getYearValue = (group: SearchResult[]) => {
+    const y = group[0].year;
+    if (!y || y === 'unknown') return null;
+    const n = Number(y);
+    return Number.isNaN(n) ? null : n;
+  };
 
-      const aIsNull = aVal === null || aVal === undefined;
-      const bIsNull = bVal === null || bVal === undefined;
-      if (aIsNull && !bIsNull) return 1;
-      if (!aIsNull && bIsNull) return -1;
-      if (aIsNull && bIsNull) return 0;
-
-      if ((aVal as number) < (bVal as number)) return sortOrder === 'asc' ? -1 : 1;
-      if ((aVal as number) > (bVal as number)) return sortOrder === 'asc' ? 1 : -1;
-
-      return a[1][0].title.localeCompare(b[1][0].title);
-    };
-
-    const exact: [string, SearchResult[]][] = [];
-    const others: [string, SearchResult[]][] = [];
-    for (const item of filteredAggregatedResults) {
-      (isExact(item[1]) ? exact : others).push(item);
+  const getSourcesCount = (group: SearchResult[]) => group.length;
+  const getEpisodesCount = (group: SearchResult[]) => {
+    let maxEpisodes = 0;
+    for (const item of group) {
+      const count = Array.isArray(item.episodes) ? item.episodes.length : 0;
+      if (count > maxEpisodes) maxEpisodes = count;
     }
-    exact.sort(compare);
-    others.sort(compare);
-    return [...exact, ...others];
-  }, [filteredAggregatedResults, sortField, sortOrder, searchQuery]);
+    return maxEpisodes;
+  };
+
+  const valueOf = (group: SearchResult[]) => {
+    switch (sortField) {
+      case 'sources': return getSourcesCount(group);
+      case 'episodes': return getEpisodesCount(group);
+      case 'year':
+      default: return getYearValue(group);
+    }
+  };
+
+  const compare = (a: [string, SearchResult[]], b: [string, SearchResult[]]) => {
+    const aVal = valueOf(a[1]);
+    const bVal = valueOf(b[1]);
+    const aIsNull = aVal === null || aVal === undefined;
+    const bIsNull = bVal === null || bVal === undefined;
+    if (aIsNull && !bIsNull) return 1;
+    if (!aIsNull && bIsNull) return -1;
+    if (aIsNull && bIsNull) return 0;
+
+    if ((aVal as number) < (bVal as number)) return sortOrder === 'asc' ? -1 : 1;
+    if ((aVal as number) > (bVal as number)) return sortOrder === 'asc' ? 1 : -1;
+
+    return a[1][0].title.localeCompare(b[1][0].title);
+  };
+
+  const exact: [string, SearchResult[]][] = [];
+  const others: [string, SearchResult[]][] = [];
+  for (const item of groups) {
+    (isExact(item[1]) ? exact : others).push(item);
+  }
+  exact.sort(compare);
+  others.sort(compare);
+
+  return { exact, others };
+}, [filteredAggregatedResults, searchResults, sortField, sortOrder, searchQuery, viewMode]);
+
+
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -303,14 +313,25 @@ function SearchPageClient() {
     }
   };
 
-  // 搜索历史、滚动监听
+  // 搜索历史、滚动监听和自动搜索处理
   useEffect(() => {
-    !searchParams.get('q') && document.getElementById('searchInput')?.focus();
+    // 检查URL中是否有搜索查询参数
+    const urlQuery = searchParams.get('q');
+    if (urlQuery) {
+      // 触发搜索
+      setSearchQuery(urlQuery);
+      setIsLoading(true);
+      setShowResults(true);
+      fetchSearchResults(urlQuery);
+      addSearchHistory(urlQuery);
+    } else {
+      document.getElementById('searchInput')?.focus();
+    }
+    
     getSearchHistory().then(setSearchHistory);
     const unsubscribe = subscribeToDataUpdates('searchHistoryUpdated', setSearchHistory);
     const handleScroll = () => {
       setShowBackToTop((document.body.scrollTop || 0) > 300);
-      setOpenFilter(null);
     };
     document.body.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
@@ -318,6 +339,20 @@ function SearchPageClient() {
       document.body.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  // 监听URL参数变化，当URL变为无参数时重新挂载组件（只执行一次）
+  useEffect(() => {
+    const urlQuery = searchParams.get('q');
+    // 如果之前有搜索参数但现在没有了，说明URL变成了无参数状态，且尚未执行过重置
+    if (!urlQuery && !hasResetOnEmptyParams) {
+      // 重置状态，模拟组件重新挂载
+      setShowResults(false);
+      setHasResetOnEmptyParams(true);
+    } else if (urlQuery) {
+      // 当有搜索参数时，重置标志位，以便下次可以再次触发
+      setHasResetOnEmptyParams(false);
+    }
+  }, [searchParams, hasResetOnEmptyParams]);
 
   // 点击空白处取消高亮
   useEffect(() => {
@@ -329,21 +364,6 @@ function SearchPageClient() {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
-
-  // URL 搜索变化
-  useEffect(() => {
-    const query = searchParams.get('q');
-    if (query) {
-      setSearchQuery(query);
-      
-      fetchSearchResults(query);
-      setShowSuggestions(false);
-      addSearchHistory(query);
-    } else {
-      setShowResults(false);
-      setShowSuggestions(false);
-    }
-  }, [searchParams]);
 
   // 更新筛选状态到 URL
   useEffect(() => {
@@ -401,10 +421,11 @@ function SearchPageClient() {
     if (searchQuery.trim()) setShowSuggestions(true);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = searchQuery.trim().replace(/\s+/g, ' ');
+  const handleSearch = (e?: React.FormEvent, query?: string) => {
+    if (e) e.preventDefault(); // 如果是表单触发，阻止默认行为
+    const trimmed = (query ?? searchQuery).trim().replace(/\s+/g, ' ');
     if (!trimmed) return;
+  
     setSearchQuery(trimmed);
     setIsLoading(true);
     setShowResults(true);
@@ -464,7 +485,7 @@ function SearchPageClient() {
     <PageLayout activePath="/search">
       <div className="px-4 sm:px-10 py-4 sm:py-8 overflow-visible mb-10">
         {/* 搜索框和搜索源选择器 - 作为一个整体 */}
-        <div className="mb-4 max-w-2xl mx-auto">
+        <div className="mb-7 max-w-2xl mx-auto">
           <div className="flex items-center">
             {/* 搜索源选择器 - 在搜索框左侧，作为一个整体 */}
             <div className="flex-shrink-0">
@@ -494,73 +515,7 @@ function SearchPageClient() {
           </div>
         </div>
 
-        {/* 筛选组件弹窗 */}
-        {showResults && searchResults.length > 0 && (
-          <div className="flex gap-3 flex-wrap mb-4 max-w-[95%] mx-auto">
-          <FilterOptions
-            title="来源"
-            options={sourceOptions}
-            selectedOptions={filterSources}
-            onChange={setFilterSources}
-            openFilter={openFilter}
-            setOpenFilter={setOpenFilter}
-          />
-          <FilterOptions
-            title="标题"
-            options={titleOptions}
-            selectedOptions={selectedTitles}
-            onChange={setSelectedTitles}
-            openFilter={openFilter}
-            setOpenFilter={setOpenFilter}
-          />
-          <FilterOptions
-            title="年份"
-            options={yearOptions}
-            selectedOptions={selectedYears}
-            onChange={setSelectedYears}
-            openFilter={openFilter}
-            setOpenFilter={setOpenFilter}
-          />
 
-          <FilterOptions
-            title="排序"
-            options={[]}
-            selectedOptions={[]}
-            onChange={() => {/* no-op for sort filter */}}
-            openFilter={openFilter}
-            setOpenFilter={setOpenFilter}
-            // 排序相关属性
-            sortField={sortField}
-            onSortFieldChange={handleSortFieldChange}
-            sortOrder={sortOrder}
-            onSortOrderChange={setSortOrder}
-            sortOptions={[
-              { value: 'sources', label: '按源数量' },
-              { value: 'year', label: '按年份' },
-              { value: 'episodes', label: '按集数' }
-            ]}
-          />
-
-          
-          {/* 全局清空筛选按钮 - 只清空标题、年份和来源筛选，不包含搜索源 */}
-          {(filterSources.length > 0 || selectedTitles.length > 0 || selectedYears.length > 0) && (
-            <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden mr-2 mb-2">
-              <button
-                onClick={() => {
-                  setFilterSources([]);
-                  setSelectedTitles([]);
-                  setSelectedYears([]);
-                }}
-                className="flex items-center gap-1 px-3 py-2 text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                title="清空所有筛选条件"
-              >
-                <RotateCcw className="w-4 h-4" />
-                清空筛选
-              </button>
-            </div>
-          )}
-          </div>
-        )}
 
 
         {/* 搜索结果 */}
@@ -570,8 +525,8 @@ function SearchPageClient() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
             </div>
           ) : showResults ? (
-          <section className="mb-12">
-            <div className="mb-8 flex items-center justify-between">
+            <section className="mb-12">
+            <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">搜索结果</h2>
                 <FailedSourcesDisplay failedSources={failedSources} />
@@ -606,13 +561,43 @@ function SearchPageClient() {
                 </label>
               </div>
             </div>
-
+          
+            {/* 筛选组件弹窗 */}
+            {showResults && searchResults.length > 0 && (
+              <div className="flex gap-3 flex-wrap mb-7 max-w-[100%] mx-auto">
+                <FilterOptions
+                  openFilter={openFilter}
+                  setOpenFilter={setOpenFilter}
+                  sourceOptions={sourceOptions}
+                  filterSources={filterSources}
+                  setFilterSources={setFilterSources}
+                  titleOptions={titleOptions}
+                  selectedTitles={selectedTitles}
+                  setSelectedTitles={setSelectedTitles}
+                  yearOptions={yearOptions}
+                  selectedYears={selectedYears}
+                  setSelectedYears={setSelectedYears}
+                  sortField={sortField}
+                  onSortFieldChange={handleSortFieldChange}
+                  sortOrder={sortOrder}
+                  onSortOrderChange={setSortOrder}
+                  sortOptions={[
+                    { value: "sources", label: "按源数量" },
+                    { value: "year", label: "按年份" },
+                    { value: "episodes", label: "按集数" },
+                  ]}
+                />
+              </div>
+            )}
+          
+            {/* 精确匹配结果 */}
             <div
               key={`search-results-${viewMode}`}
               className="justify-start grid grid-cols-3 gap-x-2 gap-y-14 sm:gap-y-20 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8"
             >
-              {viewMode
-                ? sortedAggregatedResults.map(([mapKey, group], index) => (
+              {sortedAggregatedResults.exact.map(([mapKey, group], index) => {
+                if (viewMode) {
+                  return (
                     <div key={`agg-${mapKey}-${index}`} className="w-full">
                       <VideoCard
                         from="search"
@@ -620,100 +605,78 @@ function SearchPageClient() {
                         query={searchQuery.trim() !== group[0].title ? searchQuery.trim() : ''}
                       />
                     </div>
-                  ))
-                : (() => {
-                    const filteredResults = searchResults.filter((item) => {
-                      // 来源筛选：如果没有选择任何来源（filterSources.length === 0），默认显示全部；如果选择了来源，只保留包含至少一个选中来源的影片
-                      const sourceMatch = filterSources.length === 0 ||
-                        filterSources.includes(item.source_name);
-                      const titleMatch = selectedTitles.length === 0 || selectedTitles.includes(item.title);
-                      const yearMatch = selectedYears.length === 0 || selectedYears.includes(item.year);
-                      return sourceMatch && titleMatch && yearMatch;
-                    });
-
-                    // 对非聚合结果进行排序
-                    return filteredResults
-                      .sort((a, b) => {
-                        const query = searchQuery.trim().toLowerCase();
-                        const aExactMatch = a.title.toLowerCase().includes(query);
-                        const bExactMatch = b.title.toLowerCase().includes(query);
-                        
-                        // 精确匹配的优先
-                        if (aExactMatch && !bExactMatch) return -1;
-                        if (!aExactMatch && bExactMatch) return 1;
-
-                        let aVal: number | string | null = null;
-                        let bVal: number | string | null = null;
-
-                        switch (sortField) {
-                          case 'sources':
-                            // 在非聚合模式下，源数量总是1，所以按源名称排序
-                            aVal = a.source_name;
-                            bVal = b.source_name;
-                            break;
-                          case 'episodes':
-                            aVal = a.episodes.length;
-                            bVal = b.episodes.length;
-                            break;
-                          case 'year':
-                          default:
-                            {
-                              const aYear = a.year;
-                              const bYear = b.year;
-                              if (aYear && aYear !== 'unknown') {
-                                const aNum = Number(aYear);
-                                aVal = Number.isNaN(aNum) ? aYear : aNum;
-                              }
-                              if (bYear && bYear !== 'unknown') {
-                                const bNum = Number(bYear);
-                                bVal = Number.isNaN(bNum) ? bYear : bNum;
-                              }
-                            }
-                            break;
-                        }
-
-                        const aIsNull = aVal === null || aVal === undefined;
-                        const bIsNull = bVal === null || bVal === undefined;
-                        if (aIsNull && !bIsNull) return 1;
-                        if (!aIsNull && bIsNull) return -1;
-                        if (aIsNull && bIsNull) return 0;
-
-                        if (typeof aVal === 'number' && typeof bVal === 'number') {
-                          if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-                          if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-                        } else {
-                          // 字符串比较
-                          const aStr = String(aVal);
-                          const bStr = String(bVal);
-                          if (aStr < bStr) return sortOrder === 'asc' ? -1 : 1;
-                          if (aStr > bStr) return sortOrder === 'asc' ? 1 : -1;
-                        }
-
-                        return a.title.localeCompare(b.title);
-                      })
-                      .map((item, index) => (
-                        <div key={`all-${item.source}-${item.id}-${index}`} className="w-full">
+                  );
+                } else {
+                  const item = group[0];
+                  return (
+                    <div key={`all-${mapKey}-${index}`} className="w-full">
+                      <VideoCard
+                        id={item.id}
+                        title={item.title || ''}
+                        poster={item.poster}
+                        episodes={item.episodes ? item.episodes.length : 0} // 转为 number
+                        source={item.source}
+                        source_name={item.source_name}
+                        douban_id={item.douban_id}
+                        query={searchQuery.trim() !== item.title ? searchQuery.trim() : ''}
+                        year={item.year}
+                        from="search"
+                        type={item.episodes && item.episodes.length > 1 ? 'tv' : 'movie'}
+                      />
+                    </div>
+                  );
+                }
+              })}
+          
+              {sortedAggregatedResults.exact.length === 0 && sortedAggregatedResults.others.length === 0 && (
+                <div className="col-span-full text-center text-gray-500 py-8 dark:text-gray-400">
+                  未找到相关结果
+                </div>
+              )}
+            </div>
+          
+            {/* 更多结果 */}
+            {sortedAggregatedResults.others.length > 0 && (
+              <div className="mt-8">
+                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-7">更多结果</h2>
+                <div className="justify-start grid grid-cols-3 gap-x-2 gap-y-14 sm:gap-y-20 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8">
+                  {sortedAggregatedResults.others.map(([mapKey, group], index) => {
+                    if (viewMode) {
+                      return (
+                        <div key={`agg-others-${mapKey}-${index}`} className="w-full">
+                          <VideoCard
+                            from="search"
+                            items={group}
+                            query={searchQuery.trim() !== group[0].title ? searchQuery.trim() : ''}
+                          />
+                        </div>
+                      );
+                    } else {
+                      const item = group[0];
+                      return (
+                        <div key={`all-others-${mapKey}-${index}`} className="w-full">
                           <VideoCard
                             id={item.id}
-                            title={item.title}
+                            title={item.title || ''}
                             poster={item.poster}
-                            episodes={item.episodes.length}
+                            episodes={item.episodes ? item.episodes.length : 0} // 转为 number
                             source={item.source}
                             source_name={item.source_name}
                             douban_id={item.douban_id}
                             query={searchQuery.trim() !== item.title ? searchQuery.trim() : ''}
                             year={item.year}
                             from="search"
-                            type={item.episodes.length > 1 ? 'tv' : 'movie'}
+                            type={item.episodes && item.episodes.length > 1 ? 'tv' : 'movie'}
                           />
                         </div>
-                      ));
-                  })()}
-              {searchResults.length === 0 && (
-                <div className="col-span-full text-center text-gray-500 py-8 dark:text-gray-400">未找到相关结果</div>
-              )}
-            </div>
+                      );
+                    }
+                  })}
+                </div>
+              </div>
+            )}
           </section>
+          
 
           ) : searchHistory.length > 0 ? (
             <section className="mb-12">
@@ -729,63 +692,58 @@ function SearchPageClient() {
               )}
             </h2>
             <div ref={historyRef} className="flex flex-wrap gap-2">
-  {searchHistory.map((item, index) => (
-    <div key={`history-${item}-${index}`} className="relative group">
-      <button
-        onClick={() => {
-          if (selectedHistoryItem === item) {
-            // 第二次点击触发搜索
-            const urlParams = new URLSearchParams();
-            urlParams.set('q', item.trim());
-            const timeoutSeconds = getRequestTimeout();
-            urlParams.set('timeout', timeoutSeconds.toString());
-            router.push(`/search?${urlParams.toString()}`);
-          } else {
-            // 第一次点击，选中历史项
-            setSearchQuery(item);
-            setSelectedHistoryItem(item);
-          }
-        }}
-        className={`px-4 py-2 rounded-full text-sm transition-colors duration-200 ${
-          selectedHistoryItem === item
-            ? 'bg-green-500/20 text-green-600 dark:bg-green-600/30 dark:text-green-300'
-            : 'bg-gray-500/10 hover:bg-gray-300 text-gray-700 dark:bg-gray-700/50 dark:hover:bg-gray-600 dark:text-gray-300'
-        }`}
-      >
-        {item}
-      </button>
+            {searchHistory.map((item, index) => (
+              <div key={`history-${item}-${index}`} className="relative group">
+                <button
+                  onClick={() => {
+                    if (selectedHistoryItem === item) {
+                      // 第二次点击触发搜索
+                      handleSearch(undefined, item);
+                    } else {
+                      // 第一次点击，选中历史项
+                      setSearchQuery(item);
+                      setSelectedHistoryItem(item);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-full text-sm transition-colors duration-200 ${
+                    selectedHistoryItem === item
+                      ? 'bg-green-500/20 text-green-600 dark:bg-green-600/30 dark:text-green-300'
+                      : 'bg-gray-500/10 hover:bg-gray-300 text-gray-700 dark:bg-gray-700/50 dark:hover:bg-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {item}
+                </button>
 
-      {/* 删除按钮 */}
-      {(selectedHistoryItem === item) ? (
-        <button
-          aria-label="删除搜索历史"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            deleteSearchHistory(item);
-            if (selectedHistoryItem === item) setSelectedHistoryItem(null);
-          }}
-          className="absolute -top-1 -right-1 w-4 h-4 bg-gray-400 hover:bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] transition-colors"
-        >
-          <X className="w-3 h-3" />
-        </button>
-      ) : (
-        <button
-          aria-label="删除搜索历史"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            deleteSearchHistory(item);
-          }}
-          className="absolute -top-1 -right-1 w-4 h-4 opacity-0 group-hover:opacity-100 bg-gray-400 hover:bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] transition-colors"
-        >
-          <X className="w-3 h-3" />
-        </button>
-      )}
-    </div>
-  ))}
-</div>
-
+                {/* 删除按钮 */}
+                {(selectedHistoryItem === item) ? (
+                  <button
+                    aria-label="删除搜索历史"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      deleteSearchHistory(item);
+                      if (selectedHistoryItem === item) setSelectedHistoryItem(null);
+                    }}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-gray-400 hover:bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <button
+                    aria-label="删除搜索历史"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      deleteSearchHistory(item);
+                    }}
+                    className="absolute -top-1 -right-1 w-4 h-4 opacity-0 group-hover:opacity-100 bg-gray-400 hover:bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
           </section>
           ) : null}
         </div>

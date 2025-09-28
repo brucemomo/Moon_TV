@@ -24,7 +24,7 @@ COPY . .
 
 # 在构建阶段也显式设置 DOCKER_ENV，
 # 确保 Next.js 在编译时即选择 Node Runtime 而不是 Edge Runtime
-RUN find ./src -type f -name "route.ts" -print0 \
+RUN find ./src -type f \( -name "route.ts" -o -name "layout.tsx" -o -name "not-found.tsx" \) -print0 \
   | xargs -0 sed -i "s/export const runtime = 'edge';/export const runtime = 'nodejs';/g"
 ENV DOCKER_ENV=true
 

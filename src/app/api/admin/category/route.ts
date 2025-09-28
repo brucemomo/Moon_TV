@@ -26,14 +26,6 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  if (storageType === 'upstash') {
-    return NextResponse.json(
-      {
-        error: 'Upstash 实例请通过配置文件调整',
-      },
-      { status: 400 }
-    );
-  }
 
   try {
     const body = (await request.json()) as BaseBody & Record<string, any>;

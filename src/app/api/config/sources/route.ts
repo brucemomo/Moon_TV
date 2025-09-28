@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { getConfig } from '@/lib/config';
+import { getCacheTime,getConfig } from '@/lib/config';
 
 export const runtime = 'edge';
 
@@ -9,11 +9,13 @@ export async function GET(request: NextRequest) {
     const config = await getConfig();
     const sources = config.SourceConfig || [];
     
+    const cacheTime = await getCacheTime();
+    
     return new Response(JSON.stringify(sources), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=3600', // 缓存1小时
+        'Cache-Control': `public, max-age=${cacheTime}, s-maxage=0`, // 使用配置的缓存时间
       },
     });
   } catch (error) {

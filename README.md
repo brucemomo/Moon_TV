@@ -54,7 +54,7 @@
     - [Cloudflare 部署](#cloudflare-部署)
       - [普通部署（localstorage）](#普通部署localstorage-2)
       - [D1 支持](#d1-支持)
-    - [Docker 部署(目前版本仅为2.7.4)](#docker-部署目前版本仅为274)
+    - [Docker 部署](#docker-部署)
       - [直接运行（最简单，localstorage）](#直接运行最简单localstorage)
       - [Docker Compose](#docker-compose)
         - [local storage 存储](#local-storage-存储)
@@ -80,7 +80,7 @@
 | 语言      | TypeScript 4                                                                                          |
 | 播放器    | [ArtPlayer](https://github.com/zhw2590582/ArtPlayer) · [HLS.js](https://github.com/video-dev/hls.js/) |
 | 代码质量  | ESLint · Prettier · Jest                                                                              |
-| 部署      | Docker · Vercel ·  pages                                                                    |
+| 部署      | Docker · Vercel · pages                                                                               |
 
 ## 部署
 
@@ -166,7 +166,7 @@
 4. 设置环境变量 NEXT_PUBLIC_STORAGE_TYPE，值为 **d1**；设置 USERNAME 和 PASSWORD 作为站长账号
 5. 重试部署
 
-### Docker 部署(目前版本仅为2.7.4)
+### Docker 部署
 
 #### 直接运行（最简单，localstorage）
 
@@ -228,7 +228,7 @@ services:
 | UPSTASH_TOKEN                       | upstash redis 连接 token                     | 连接 token                       | 空                                                                                                                         |
 | NEXT_PUBLIC_ENABLE_REGISTER         | 是否开放注册，仅在非 localstorage 部署时生效 | true / false                     | false                                                                                                                      |
 | NEXT_PUBLIC_SEARCH_MAX_PAGE         | 搜索接口可拉取的最大页数                     | 1-50                             | 5                                                                                                                          |
-| NEXT_PUBLIC_DOUBAN_PROXY_TYPE       | 豆瓣数据源请求方式                           | 见下方                           |                                                                                               direct                      |
+| NEXT_PUBLIC_DOUBAN_PROXY_TYPE       | 豆瓣数据源请求方式                           | 见下方                           | direct                                                                                                                     |
 | NEXT_PUBLIC_DOUBAN_PROXY            | 自定义豆瓣数据代理 URL                       | url prefix                       | (空)                                                                                                                       |
 | NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE | 豆瓣图片代理类型                             | 见下方                           | direct                                                                                                                     |
 | NEXT_PUBLIC_DOUBAN_IMAGE_PROXY      | 自定义豆瓣图片代理 URL                       | url prefix                       | (空)                                                                                                                       |
@@ -254,12 +254,11 @@ NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE 选项解释：
 
 ## 配置说明
 
-如果为localstorage模式所有可自定义项集中在根目录的 `config.json` 中(localstorage模式)
-非localstorage可在部署好的网页中直接配置
+如果为 localstorage 模式所有可自定义项集中在根目录的 `config.json` 中(localstorage 模式)
+非 localstorage 可在部署好的网页中直接配置
 
 ```json
 {
-  "cache_time": 7200,
   "api_site": {
     "dyttzy": {
       "api": "http://caiji.dyttzyapi.com/api.php/provide/vod",
@@ -314,7 +313,9 @@ MoonTV 支持标准的苹果 CMS V10 API 格式。
 
 目前该项目可以配合 [OrionTV](https://github.com/zimplexing/OrionTV) 在 Android TV 上使用，可以直接作为 OrionTV 后端
 
-暂时收藏夹与播放记录和网页端隔离，后续会支持同步用户数据
+## Selene 使用
+
+该项目已兼容 [Selene](https://github.com/MoonTechLab/Selene) 在移动端上使用，可以直接作为 Selene 后端
 
 ## Roadmap
 

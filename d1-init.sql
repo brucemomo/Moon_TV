@@ -78,43 +78,10 @@ CREATE TABLE IF NOT EXISTS skip_configs (
 
 -- 创建管理员配置表
 CREATE TABLE IF NOT EXISTS admin_config (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  config_file TEXT DEFAULT 'config.json',
-  site_name TEXT DEFAULT 'MoonTV',
-  announcement TEXT,
-  search_downstream_max_page INTEGER DEFAULT 3,
-  site_interface_cache_time INTEGER DEFAULT 300,
-  allow_register BOOLEAN DEFAULT false,
-  douban_proxy_type TEXT DEFAULT 'direct',
-  douban_proxy TEXT,
-  douban_image_proxy_type TEXT DEFAULT 'direct',
-  douban_image_proxy TEXT,
-  disable_yellow_filter BOOLEAN DEFAULT false,
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  config TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 创建源配置表
-CREATE TABLE IF NOT EXISTS source_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  config_key TEXT NOT NULL,
-  name TEXT NOT NULL,
-  api TEXT NOT NULL,
-  detail TEXT,
-  source_from TEXT DEFAULT 'config',
-  disabled BOOLEAN DEFAULT false,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 创建自定义分类表
-CREATE TABLE IF NOT EXISTS custom_categories (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT,
-  category_type TEXT NOT NULL,
-  query TEXT NOT NULL,
-  category_from TEXT DEFAULT 'config',
-  disabled BOOLEAN DEFAULT false,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 输出成功信息

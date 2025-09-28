@@ -148,6 +148,7 @@ export default function VideoCard({
             cover: actualPoster,
             total_episodes: actualEpisodes ?? 1,
             save_time: Date.now(),
+            search_title: actualQuery || '',
           });
           setFavorited(true);
         }
