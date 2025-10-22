@@ -1,31 +1,45 @@
 /* eslint-disable @typescript-eslint/no-explicit-any,no-console */
-import { getCacheTime, getConfig } from '@/lib/config';
+
+import { NextRequest } from 'next/server';
+
+import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getAvailableApiSites, getCacheTime, getConfig } from '@/lib/config';
 import { searchFromApiStream } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
 
 export const runtime = 'edge';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // 检查是否为本地存储模式
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  const isLocalStorage = storageType === 'localstorage';
+  
+  let authInfo = null;
+  if (!isLocalStorage) {
+    // 非本地存储模式才需要认证
+    authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
   const streamParam = searchParams.get('stream');
-  // 如果未显式指定 stream，且请求并非来自浏览器（无 sec-fetch-* 头），默认关闭流式以兼容原生客户端
-  const isBrowserLikeRequest = !!(
-    request.headers.get('sec-fetch-mode') ||
-    request.headers.get('sec-fetch-dest') ||
-    request.headers.get('sec-fetch-site')
-  );
-  const enableStream = streamParam ? streamParam !== '0' : isBrowserLikeRequest; // 浏览器默认流式，原生默认非流式
+  const enableStream = streamParam ? streamParam !== '0' : false; // 无该参数关闭流式
   const timeoutParam = searchParams.get('timeout');
   const timeout = timeoutParam ? parseInt(timeoutParam, 10) * 1000 : undefined; // 转换为毫秒
 
   const config = await getConfig();
   
-  // 获取选中的搜索源
-  const selectedSourcesParam = searchParams.get('sources');
-  let apiSites = config.SourceConfig.filter((site) => !site.disabled);
+  // 获取用户可用的搜索源
+  let apiSites = await getAvailableApiSites(authInfo?.username);
   
   // 如果指定了搜索源，只使用选中的搜索源
+  const selectedSourcesParam = searchParams.get('sources');
   if (selectedSourcesParam) {
     const selectedSources = selectedSourcesParam.split(',');
     apiSites = apiSites.filter(site => selectedSources.includes(site.key));
@@ -123,9 +137,7 @@ export async function GET(request: Request) {
     const failedSources = results.filter((r) => r.failed).map((r) => r.failed);
 
     if (aggregatedResults.length === 0) {
-      const body = isBrowserLikeRequest
-        ? { aggregatedResults, failedSources }
-        : { results: [], failedSources };
+      const body = { results: [], failedSources };
       return new Response(JSON.stringify(body), {
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -136,9 +148,7 @@ export async function GET(request: Request) {
       });
     } else {
       const cacheTime = await getCacheTime();
-      const body = isBrowserLikeRequest
-        ? { aggregatedResults, failedSources }
-        : { results: aggregatedResults, failedSources };
+      const body = { results: aggregatedResults, failedSources };
       return new Response(JSON.stringify(body), {
         headers: {
           'Content-Type': 'application/json; charset=utf-8',

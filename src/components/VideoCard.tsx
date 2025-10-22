@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Heart, PlayCircleIcon, Trash2 } from 'lucide-react';
+import { ExternalLink, Heart, Link, PlayCircleIcon, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import React, { useCallback,useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 
 import {
   deleteFavorite,
@@ -17,6 +17,8 @@ import { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 
 import { ImagePlaceholder } from '@/components/ImagePlaceholder';
+import MobileActionSheet from '@/components/MobileActionSheet';
+import { useNavigationLoading } from '@/components/NavigationLoadingProvider';
 
 interface VideoCardProps {
   id?: string;
@@ -58,10 +60,13 @@ export default function VideoCard({
   isBangumi = false,
 }: VideoCardProps) {
   const router = useRouter();
+  const { startLoading } = useNavigationLoading();
   const [favorited, setFavorited] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showSources, setShowSources] = useState(false);
   const [favoriteChecked, setFavoriteChecked] = useState(false); // 是否已经检查过收藏状态
+  const [isActionOpen, setIsActionOpen] = useState(false);
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
 
   const isAggregate = from === 'search' && !!items?.length;
 
@@ -127,14 +132,15 @@ export default function VideoCard({
         setFavorited(isNowFavorited);
       });
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error('检查收藏状态失败', err);
     }
   }, [from, actualSource, actualId]);
 
   const handleToggleFavorite = useCallback(
-    async (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    async (e?: React.MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
       if (from === 'douban' || !actualSource || !actualId) return;
       try {
         if (favorited) {
@@ -153,6 +159,7 @@ export default function VideoCard({
           setFavorited(true);
         }
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('切换收藏状态失败', err);
       }
     },
@@ -165,6 +172,7 @@ export default function VideoCard({
       actualYear,
       actualPoster,
       actualEpisodes,
+      actualQuery,
       favorited,
     ]
   );
@@ -178,6 +186,7 @@ export default function VideoCard({
         await deletePlayRecord(actualSource, actualId);
         onDelete?.();
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('删除播放记录失败', err);
       }
     },
@@ -186,6 +195,8 @@ export default function VideoCard({
 
   const handleClick = useCallback(() => {
     // 点击时不再检查收藏状态
+    // 触发加载动画
+    startLoading();
 
     if (from === 'douban') {
       router.push(
@@ -214,6 +225,7 @@ export default function VideoCard({
     isAggregate,
     actualQuery,
     actualSearchType,
+    startLoading,
   ]);
 
   const config = useMemo(() => {
@@ -224,7 +236,7 @@ export default function VideoCard({
         showPlayButton: true,
         showHeart: true,
         showCheckCircle: true,
-        showDoubanLink: false,
+        showDoubanLink: !!actualDoubanId,
         showRating: false,
       },
       favorite: {
@@ -233,7 +245,7 @@ export default function VideoCard({
         showPlayButton: true,
         showHeart: true,
         showCheckCircle: false,
-        showDoubanLink: false,
+        showDoubanLink: !!actualDoubanId,
         showRating: false,
       },
       search: {
@@ -262,6 +274,34 @@ export default function VideoCard({
   return (
     <div
       className="group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:scale-[1.05] hover:z-[500]"
+      style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsActionOpen(true);
+      }}
+      onTouchStart={(e) => {
+        e.stopPropagation();
+        if (longPressTimer) {
+          window.clearTimeout(longPressTimer);
+        }
+        const timerId = window.setTimeout(() => {
+          setIsActionOpen(true);
+        }, 500);
+        setLongPressTimer(timerId);
+      }}
+      onTouchEnd={() => {
+        if (longPressTimer) {
+          window.clearTimeout(longPressTimer);
+          setLongPressTimer(null);
+        }
+      }}
+      onTouchCancel={() => {
+        if (longPressTimer) {
+          window.clearTimeout(longPressTimer);
+          setLongPressTimer(null);
+        }
+      }}
       onMouseEnter={() => {
           // 收藏夹里的卡片直接默认已收藏，不检查数据库
         if (from === 'favorite' && !favorited) {
@@ -339,22 +379,7 @@ export default function VideoCard({
         {/* ⭐ 评分显示（左上角小圆圈，可跳转豆瓣或 Bangumi） */}
         {config.showRating && rate && actualDoubanId && (
           <div
-            onClick={(e) => {
-              e.stopPropagation(); // 阻止触发卡片点击
-
-              const searchParams = new URLSearchParams(window.location.search);
-              const type = searchParams.get("type");
-
-              if (type === "anime") {
-                // 动漫 → Bangumi
-                window.open(`https://bangumi.tv/subject/${actualDoubanId}`, "_blank");
-              } else {
-                // 默认 → 豆瓣
-                window.open(`https://movie.douban.com/subject/${actualDoubanId}`, "_blank");
-              }
-            }}
             className="absolute top-2 left-2 bg-pink-500 text-white text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full shadow-md cursor-pointer hover:bg-pink-600 transition"
-            title="去详情页查看"
           >
             {rate}
           </div>
@@ -368,6 +393,39 @@ export default function VideoCard({
         >
           {actualYear}
         </div>
+        )}
+
+        {/* 🔗 豆瓣/Bangumi跳转链接（左下角） */}
+        {config.showDoubanLink && actualDoubanId && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation(); // 阻止触发卡片点击
+              
+              if (isBangumi) {
+                // 动漫 → Bangumi
+                window.open(`https://bangumi.tv/subject/${actualDoubanId}`, "_blank");
+              } else {
+                // 默认 → 豆瓣
+                window.open(`https://movie.douban.com/subject/${actualDoubanId}`, "_blank");
+              }
+            }}
+            className="absolute bottom-2 left-2 bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-green-600 hover:scale-[1.1] transition-all duration-300 ease-out opacity-0 group-hover:opacity-100 cursor-pointer"
+            title={isBangumi ? "跳转到 Bangumi" : "跳转到豆瓣"}
+          >
+            <svg
+              width='16'
+              height='16'
+              viewBox='0 0 24 24'
+              fill='none'
+              stroke='currentColor'
+              strokeWidth='2'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+            >
+              <path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'></path>
+              <path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'></path>
+            </svg>
+          </div>
         )}
 
         {/* 集数 */}
@@ -448,6 +506,102 @@ export default function VideoCard({
           </span>
         )}
       </div>
+
+      {/* 右键 / 长按 操作面板 */}
+      <MobileActionSheet
+        isOpen={isActionOpen}
+        onClose={() => setIsActionOpen(false)}
+        title={actualTitle}
+        poster={processImageUrl(actualPoster)}
+        sourceName={source_name}
+        isAggregate={isAggregate}
+        sources={isAggregate && items ? items.map(i => i.source_name || '').filter(Boolean) : []}
+        currentEpisode={currentEpisode}
+        totalEpisodes={actualEpisodes || undefined}
+        origin="vod"
+        actions={[
+          {
+            id: 'play',
+            label: '播放',
+            icon: <PlayCircleIcon size={20} />,
+            color: 'primary',
+            onClick: () => handleClick(),
+          },
+          {
+            id: 'play-new-tab',
+            label: '在新标签页播放',
+            icon: <ExternalLink size={20} />,
+            color: 'default',
+            onClick: () => {
+              if (from === 'douban') {
+                window.open(
+                  `/play?title=${encodeURIComponent(actualTitle.trim())}${
+                    actualYear ? `&year=${actualYear}` : ''
+                  }${actualSearchType ? `&stype=${actualSearchType}` : ''}`,
+                  '_blank'
+                );
+              } else if (actualSource && actualId) {
+                window.open(
+                  `/play?source=${actualSource}&id=${actualId}&title=${encodeURIComponent(
+                    actualTitle
+                  )}${actualYear ? `&year=${actualYear}` : ''}${
+                    isAggregate ? '&prefer=true' : ''
+                  }${
+                    actualQuery ? `&stitle=${encodeURIComponent(actualQuery.trim())}` : ''
+                  }${actualSearchType ? `&stype=${actualSearchType}` : ''}`,
+                  '_blank'
+                );
+              }
+            },
+          },
+          ...(from !== 'douban' && !(from === 'search' && isAggregate) && actualSource && actualId
+            ? [
+                favorited
+                  ? {
+                      id: 'unfavorite',
+                      label: '取消收藏',
+                      icon: <Heart size={18} className="fill-red-600 stroke-red-600" />,
+                      color: 'danger' as const,
+                      onClick: (e?: React.MouseEvent) => handleToggleFavorite(e as React.MouseEvent),
+                    }
+                  : {
+                      id: 'favorite',
+                      label: '加入收藏',
+                      icon: <Heart size={18} className="fill-transparent stroke-gray-600" />,
+                      color: 'primary' as const,
+                      onClick: (e?: React.MouseEvent) => handleToggleFavorite(e as React.MouseEvent),
+                    },
+              ]
+            : []),
+          ...(from === 'playrecord' && actualSource && actualId
+            ? [
+                {
+                  id: 'delete-record',
+                  label: '删除播放记录',
+                  icon: <Trash2 size={18} />,
+                  color: 'danger' as const,
+                  onClick: (e?: React.MouseEvent) => handleDeleteRecord(e as React.MouseEvent),
+                },
+              ]
+            : []),
+          ...(actualDoubanId
+            ? [
+                {
+                  id: 'open-link',
+                  label: isBangumi ? '打开 Bangumi 页面' : '打开豆瓣页面',
+                  icon: <Link size={18} />,
+                  onClick: () => {
+                    if (isBangumi) {
+                      window.open(`https://bangumi.tv/subject/${actualDoubanId}`, '_blank');
+                    } else {
+                      window.open(`https://movie.douban.com/subject/${actualDoubanId}`, '_blank');
+                    }
+                  },
+                },
+              ]
+            : []),
+        ]}
+      />
     </div>
   );
 }
