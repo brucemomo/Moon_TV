@@ -11,6 +11,54 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "3.6.2",
+    date: "2025-12-09",
+    added: [
+    "添加默认优选换源开关"
+    ],
+    changed: [
+    "优化弹幕自动加载",
+    "默认为空壳项目(无内置源和弹幕)",
+    "优化优选换源加载形式"
+    ],
+    fixed: [
+    "OrionTV本地存储播放无源"
+    ]
+  },
+  {
+    version: "3.5.7",
+    date: "2025-12-06",
+    added: [
+    "自动弹幕加载功能",
+    "订阅配置功能"
+    ],
+    changed: [
+    "优化弹幕加载",
+    "使用artplayer弹幕库",
+    "弹幕加载状态提示"
+    ],
+    fixed: [
+      // 无修复内容
+    ]
+  },
+  {
+    version: "3.5.0",
+    date: "2025-11-30",
+    added: [
+    "加入视频播放弹幕功能"
+    ],
+    changed: [
+    "可手动搜索弹幕源",
+    "可控制弹幕的显示行数",
+    "可控制弹幕的显示密度",
+    "分页渲染搜索结果"
+    ],
+    fixed: [
+    "修复CF数据导出的不完整",
+    "修复docker非本地存储管理员配置的读取修改"
+    ]
+  },
+  {
     version: "3.4.2",
     date: "2025-10-21",
     added: [

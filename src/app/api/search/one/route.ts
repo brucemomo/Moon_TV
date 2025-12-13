@@ -9,9 +9,17 @@ export const runtime = 'edge';
 
 // OrionTV 兼容接口（JSON 非流式）
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // 检查是否为本地存储模式
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  const isLocalStorage = storageType === 'localstorage';
+
+  let authInfo = null;
+  if (!isLocalStorage) {
+    authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   const { searchParams } = new URL(request.url);
@@ -36,7 +44,7 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = await getAvailableApiSites(authInfo.username);
+  const apiSites = await getAvailableApiSites(authInfo?.username);
 
   try {
     const targetSite = apiSites.find((site) => site.key === resourceId);

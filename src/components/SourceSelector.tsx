@@ -182,11 +182,6 @@ export default function SourceSelector({
     );
   }
 
-  // 如果没有可用的搜索源，不显示组件
-  if (availableSources.length === 0) {
-    return null;
-  }
-
   return (
     <div className="relative inline-block">
       <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded-l-lg overflow-hidden">
@@ -282,27 +277,33 @@ export default function SourceSelector({
             </div>
           </div>
           
-          <div
-            className="grid gap-2"
-            style={{
-              gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
-            }}
-          >
-            {availableSources.map((source) => (
-              <button
-                key={source.key}
-                onClick={() => handleSourceClick(source.key)}
-                className={`px-3 py-2 text-sm rounded-lg transition-all duration-200 text-center ${
-                  selectedSources.includes(source.key)
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-700'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-700/80'
-                }`}
-                title={source.name}
-              >
-                {source.name}
-              </button>
-            ))}
-          </div>
+          {availableSources.length > 0 ? (
+            <div
+              className="grid gap-2"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+              }}
+            >
+              {availableSources.map((source) => (
+                <button
+                  key={source.key}
+                  onClick={() => handleSourceClick(source.key)}
+                  className={`px-3 py-2 text-sm rounded-lg transition-all duration-200 text-center ${
+                    selectedSources.includes(source.key)
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-700'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-700/80'
+                  }`}
+                  title={source.name}
+                >
+                  {source.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="py-4 text-center text-gray-500 dark:text-gray-400">
+              请配置搜索源或清除缓存
+            </div>
+          )}
         </div>
       )}
     </div>

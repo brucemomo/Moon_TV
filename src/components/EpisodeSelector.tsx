@@ -43,7 +43,7 @@ interface EpisodeSelectorProps {
   /** 预计算的测速结果，避免重复测速 */
   precomputedVideoInfo?: Map<string, VideoInfo>;
   /** 优选播放源相关 */
-  preferBestSource?: (sources: SearchResult[]) => Promise<SearchResult>;
+  preferBestSource?: (sources: SearchResult[], isCancelled?: () => boolean) => Promise<SearchResult>;
   setLoading: (loading: boolean) => void;
   /** 设置视频是否正在加载中的状态 */
   setIsVideoLoading: (loading: boolean) => void;
@@ -109,6 +109,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   // 是否倒序显示
   const [descending, setDescending] = useState<boolean>(false);
+  // 优选播放源加载状态
+  const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
+  // 取消优选标志
+  const cancelOptimizationRef = useRef<boolean>(false);
 
   // 根据 descending 状态计算实际显示的分页索引
   const displayPage = useMemo(() => {
@@ -354,28 +358,39 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
             <div
               onClick={(e) => {
                 e.stopPropagation();
+                if (isOptimizing) return; // 防止重复点击
                 if (!availableSources || availableSources.length === 0) return;
-                setVideoLoadingStage('optimizing');
-                setIsVideoLoading(true);
-                preferBestSource(availableSources)
+                // 重置取消标志
+                cancelOptimizationRef.current = false;
+                setIsOptimizing(true);
+                preferBestSource(availableSources, () => cancelOptimizationRef.current)
                   .then((bestSource) => {
+                    // 如果已取消，则忽略结果
+                    if (cancelOptimizationRef.current) return;
                     // 确保bestSource有效
-                    if (bestSource && bestSource.source !== currentSource && bestSource.id !== currentId) {
-                      // 无论是否是当前源，都调用handleSourceClick重新加载播放器
+                    if (bestSource && (bestSource.source !== currentSource || bestSource.id !== currentId)) {
+                      // 切换到最佳播放源
                       handleSourceClick(bestSource);
-                    }else{
-                      setIsVideoLoading(false);
                     }
                   })
                   .catch((_err: Error) => {
                     // 静默处理错误，因为已经有UI提示
                   })
                   .finally(() => {
-                    if (setLoading) setLoading(false);
+                    if (!cancelOptimizationRef.current) {
+                      setIsOptimizing(false);
+                      if (setLoading) setLoading(false);
+                    }
+                    // 重置取消标志
+                    cancelOptimizationRef.current = false;
                   });
               }}
-              className="ml-2 bg-blue-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md hover:bg-blue-600 hover:scale-110 transition-all duration-300 ease-out"
-              title="优选播放源"
+              className={`ml-2 bg-blue-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md transition-all duration-300 ease-out ${
+                isOptimizing
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:bg-blue-600 hover:scale-110 cursor-pointer'
+              }`}
+              title={isOptimizing ? '优选进行中...' : '优选播放源'}
             >
               <svg
                 className="w-3.5 h-3.5"
@@ -501,6 +516,27 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               <span className='ml-2 text-sm text-gray-600 dark:text-gray-300'>
                 搜索中...
               </span>
+            </div>
+          )}
+
+          {isOptimizing && (
+            <div className='flex items-center justify-center py-3'>
+              <div className='flex items-center'>
+                <div className='animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500'></div>
+                <span className='ml-2 text-sm text-gray-600 dark:text-gray-300'>
+                  优选播放源中...
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  cancelOptimizationRef.current = true;
+                  setIsOptimizing(false);
+                  if (setLoading) setLoading(false);
+                }}
+                className='ml-4 text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 px-2 py-1 rounded border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors'
+              >
+                取消
+              </button>
             </div>
           )}
 
