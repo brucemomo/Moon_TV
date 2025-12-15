@@ -49,6 +49,10 @@ const TopNav = ({ activePath = '/' }: TopNavProps) => {
   const historyButtonRef = useRef<HTMLButtonElement>(null);
   const historyPopupRef = useRef<HTMLDivElement>(null);
 
+  // 简洁模式搜索栏展开状态
+  const [showSearchBar, setShowSearchBar] = useState(false);
+  const searchBarRef = useRef<HTMLDivElement>(null);
+
   // 检查是否启用简洁模式
   const [simpleMode, setSimpleMode] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -230,6 +234,24 @@ const TopNav = ({ activePath = '/' }: TopNavProps) => {
     setShowHistory(false);
   };
 
+  // 点击外部关闭搜索栏
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showSearchBar &&
+        searchBarRef.current &&
+        !searchBarRef.current.contains(event.target as Node)
+      ) {
+        setShowSearchBar(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSearchBar]);
+
   // 点击外部关闭历史弹窗
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -250,40 +272,175 @@ const TopNav = ({ activePath = '/' }: TopNavProps) => {
     };
   }, [showHistory]);
 
+  // 搜索栏内容（简洁和非简洁模式复用）
+  const searchBarContent = (
+    <div className='flex-1 max-w-md flex items-center' ref={searchBarRef}>
+      {/* 搜索源选择器 */}
+      <div className='flex-shrink-0'>
+        <SourceSelector
+          selectedSources={searchSources}
+          onChange={setSearchSources}
+          openFilter={openFilter}
+          setOpenFilter={setOpenFilter}
+          size='compact'
+        />
+      </div>
+
+      {/* 搜索框 */}
+      <div className='relative flex-1'>
+        <form onSubmit={handleSearch} className='relative'>
+          <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500' />
+          <input
+            ref={searchInputRef}
+            type='text'
+            value={searchQuery}
+            onChange={handleInputChange}
+            onFocus={handleInputFocus}
+            placeholder='搜索电影、电视剧...'
+            className='w-full h-10 rounded-r-lg rounded-l-none bg-gray-100/80 py-2 pl-10 pr-20 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all duration-200 border border-gray-200/50 border-l-0 dark:bg-gray-800 dark:text-gray-300 dark:placeholder-gray-500 dark:focus:bg-gray-700 dark:border-gray-700'
+          />
+          <div className='absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1'>
+            {searchQuery && (
+              <button
+                type='button'
+                onClick={clearSearch}
+                className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors'
+              >
+                <X className='h-4 w-4' />
+              </button>
+            )}
+            {/* 历史记录按钮 */}
+            <button
+              ref={historyButtonRef}
+              type='button'
+              onClick={() => setShowHistory(!showHistory)}
+              className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors relative'
+              title='搜索历史'
+            >
+              <History className='h-4 w-4' />
+              {searchHistory.length > 0 && (
+                <span className='absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full'></span>
+              )}
+            </button>
+          </div>
+          <SearchSuggestions
+            query={searchQuery}
+            isVisible={showSuggestions}
+            onSelect={handleSuggestionSelect}
+            onClose={() => setShowSuggestions(false)}
+          />
+        </form>
+
+        {/* 历史记录弹窗 */}
+        {showHistory && searchHistory.length > 0 && (
+          <div
+            ref={historyPopupRef}
+            className='absolute top-full right-0 mt-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50'
+          >
+            <div className='p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between'>
+              <h3 className='text-sm font-semibold text-gray-700 dark:text-gray-300'>
+                搜索历史
+              </h3>
+              <button
+                onClick={handleClearAllHistory}
+                className='text-xs text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 transition-colors'
+              >
+                清空全部
+              </button>
+            </div>
+            <div className='p-2'>
+              {searchHistory.map((item, index) => (
+                <div
+                  key={`history-${item}-${index}`}
+                  className='group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer'
+                  onClick={() => handleHistoryClick(item)}
+                >
+                  <span className='text-sm text-gray-700 dark:text-gray-300 truncate flex-1'>
+                    {item}
+                  </span>
+                  <button
+                    onClick={(e) => handleDeleteHistory(item, e)}
+                    className='ml-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-500 transition-colors'
+                    title='删除'
+                  >
+                    <Trash2 className='h-3 w-3' />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const searchButton = (
+    <button
+      onClick={() => {
+        setShowSearchBar(true);
+        setTimeout(() => searchInputRef.current?.focus(), 300);
+      }}
+      className='p-2 text-gray-700 hover:bg-gray-100/50 hover:text-green-600 rounded-lg transition-colors duration-200 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700/50 flex-shrink-0'
+      title='搜索'
+    >
+      <Search className='h-5 w-5' />
+    </button>
+  );
+
   return (
     <header className='hidden md:block sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm dark:bg-gray-900/80 dark:border-gray-700/50'>
       <div className='mx-auto px-6 h-16 flex items-center justify-between gap-6'>
         {/* Logo */}
-        <Link
-          href='/'
-          className='flex items-center justify-center select-none hover:opacity-80 transition-opacity duration-200 flex-shrink-0'
-          onClick={() => {
-            if (active !== '/') {
-              startLoading();
-            }
-          }}
-        >
-          <span className='text-2xl font-bold text-green-600 tracking-tight'>
-            {siteName}
-          </span>
-        </Link>
+        {simpleMode ? (
+          <div className='absolute left-1/2 transform -translate-x-1/2'>
+            <Link
+              href='/'
+              className='flex items-center justify-center select-none hover:opacity-80 transition-opacity duration-200'
+              onClick={() => {
+                if (active !== '/') {
+                  startLoading();
+                }
+              }}
+            >
+              <span className='text-2xl font-bold text-green-600 tracking-tight'>
+                {siteName}
+              </span>
+            </Link>
+          </div>
+        ) : (
+          <Link
+            href='/'
+            className='flex items-center justify-center select-none hover:opacity-80 transition-opacity duration-200 flex-shrink-0'
+            onClick={() => {
+              if (active !== '/') {
+                startLoading();
+              }
+            }}
+          >
+            <span className='text-2xl font-bold text-green-600 tracking-tight'>
+              {siteName}
+            </span>
+          </Link>
+        )}
 
         {/* 导航菜单 */}
         <nav className='flex items-center gap-1 flex-shrink-0'>
-        <Link
-          href='/'
-          onClick={() => {
-            if (active !== '/') {
-              startLoading();
-            }
-            setActive('/');
-          }}
-          data-active={active === '/'}
-          className='group flex items-center gap-2 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100/50 hover:text-green-600 data-[active=true]:bg-green-500/10 data-[active=true]:text-green-600 font-medium transition-colors duration-200 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700/50 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400'
-        >
-          <Home className='h-4 w-4' />
-          <span>首页</span>
-        </Link>
+        {isClient && !simpleMode && (
+          <Link
+            href='/'
+            onClick={() => {
+              if (active !== '/') {
+                startLoading();
+              }
+              setActive('/');
+            }}
+            data-active={active === '/'}
+            className='group flex items-center gap-2 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100/50 hover:text-green-600 data-[active=true]:bg-green-500/10 data-[active=true]:text-green-600 font-medium transition-colors duration-200 dark:text-gray-300 dark:hover:text-green-400 dark:hover:bg-gray-700/50 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400'
+          >
+            <Home className='h-4 w-4' />
+            <span>首页</span>
+          </Link>
+        )}
 
           {isClient && !simpleMode && menuItems.map((item) => {
             const typeMatch = item.href.match(/type=([^&]+)/)?.[1];
@@ -315,108 +472,17 @@ const TopNav = ({ activePath = '/' }: TopNavProps) => {
           })}
         </nav>
 
-        {/* 搜索栏 */}
-        <div className='flex-1 max-w-md flex items-center'>
-          {/* 搜索源选择器 */}
-          <div className='flex-shrink-0'>
-            <SourceSelector
-              selectedSources={searchSources}
-              onChange={setSearchSources}
-              openFilter={openFilter}
-              setOpenFilter={setOpenFilter}
-              size='compact'
-            />
-          </div>
+        {/* 中间占位区域 */}
+        <div className='flex-1'></div>
 
-          {/* 搜索框 */}
-          <div className='relative flex-1'>
-            <form onSubmit={handleSearch} className='relative'>
-              <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500' />
-              <input
-                ref={searchInputRef}
-                type='text'
-                value={searchQuery}
-                onChange={handleInputChange}
-                onFocus={handleInputFocus}
-                placeholder='搜索电影、电视剧...'
-                className='w-full h-10 rounded-r-lg rounded-l-none bg-gray-100/80 py-2 pl-10 pr-20 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all duration-200 border border-gray-200/50 border-l-0 dark:bg-gray-800 dark:text-gray-300 dark:placeholder-gray-500 dark:focus:bg-gray-700 dark:border-gray-700'
-              />
-              <div className='absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1'>
-                {searchQuery && (
-                  <button
-                    type='button'
-                    onClick={clearSearch}
-                    className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors'
-                  >
-                    <X className='h-4 w-4' />
-                  </button>
-                )}
-                {/* 历史记录按钮 */}
-                <button
-                  ref={historyButtonRef}
-                  type='button'
-                  onClick={() => setShowHistory(!showHistory)}
-                  className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors relative'
-                  title='搜索历史'
-                >
-                  <History className='h-4 w-4' />
-                  {searchHistory.length > 0 && (
-                    <span className='absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full'></span>
-                  )}
-                </button>
-              </div>
-              <SearchSuggestions
-                query={searchQuery}
-                isVisible={showSuggestions}
-                onSelect={handleSuggestionSelect}
-                onClose={() => setShowSuggestions(false)}
-              />
-            </form>
-
-            {/* 历史记录弹窗 */}
-            {showHistory && searchHistory.length > 0 && (
-              <div
-                ref={historyPopupRef}
-                className='absolute top-full right-0 mt-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50'
-              >
-                <div className='p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between'>
-                  <h3 className='text-sm font-semibold text-gray-700 dark:text-gray-300'>
-                    搜索历史
-                  </h3>
-                  <button
-                    onClick={handleClearAllHistory}
-                    className='text-xs text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 transition-colors'
-                  >
-                    清空全部
-                  </button>
-                </div>
-                <div className='p-2'>
-                  {searchHistory.map((item, index) => (
-                    <div
-                      key={`history-${item}-${index}`}
-                      className='group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer'
-                      onClick={() => handleHistoryClick(item)}
-                    >
-                      <span className='text-sm text-gray-700 dark:text-gray-300 truncate flex-1'>
-                        {item}
-                      </span>
-                      <button
-                        onClick={(e) => handleDeleteHistory(item, e)}
-                        className='ml-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-500 transition-colors'
-                        title='删除'
-                      >
-                        <Trash2 className='h-3 w-3' />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+        {/* 搜索栏 / 搜索按钮 */}
+        <div className='flex items-center justify-end'>
+          {showSearchBar && searchBarContent}
+          {!showSearchBar && searchButton}
         </div>
 
         {/* 右侧按钮组 */}
-        <div className='flex items-center gap-2 flex-shrink-0'>
+        <div className='flex items-center gap-2 flex-shrink-0 mr-9'>
           <ThemeToggle />
           <UserMenu />
         </div>
