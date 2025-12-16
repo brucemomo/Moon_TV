@@ -25,6 +25,7 @@ import CapsuleSwitch from '@/components/CapsuleSwitch';
 import ContinueWatching from '@/components/ContinueWatching';
 import PageLayout from '@/components/PageLayout';
 import ScrollableRow from '@/components/ScrollableRow';
+import { useNavigationLoading } from '@/components/NavigationLoadingProvider';
 import { useSite } from '@/components/SiteProvider';
 import VideoCard from '@/components/VideoCard';
 
@@ -38,6 +39,7 @@ function HomeClient() {
   >([]);
   const [loading, setLoading] = useState(true);
   const { announcement } = useSite();
+  const { startLoading } = useNavigationLoading();
 
   const [showAnnouncement, setShowAnnouncement] = useState(false);
   
@@ -284,6 +286,7 @@ function HomeClient() {
                       </h2>
                       <Link
                         href='/douban?type=movie'
+                        onClick={startLoading}
                         className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                       >
                         查看更多
@@ -332,6 +335,7 @@ function HomeClient() {
                       </h2>
                       <Link
                         href='/douban?type=tv'
+                        onClick={startLoading}
                         className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                       >
                         查看更多
@@ -379,6 +383,7 @@ function HomeClient() {
                       </h2>
                       <Link
                         href='/douban?type=anime'
+                        onClick={startLoading}
                         className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                       >
                         查看更多
@@ -454,6 +459,7 @@ function HomeClient() {
                       </h2>
                       <Link
                         href='/douban?type=show'
+                        onClick={startLoading}
                         className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                       >
                         查看更多
