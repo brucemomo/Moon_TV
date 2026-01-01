@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>StreamSaver Middleware</title>
+</head>
+<body>
+  <script>
+  // 中间人传输页面
+  // 用于在主页面和 Service Worker 之间传递消息
+  
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(reg => {
+        window.parent.postMessage('stream-saver-ready', '*')
+        
+        window.onmessage = evt => {
+          if (evt.data && evt.data.transferringReadable !== undefined) {
+            navigator.serviceWorker.controller?.postMessage(evt.data, evt.ports)
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Service Worker registration failed:', err)
+      })
+  } else {
+    console.error('Service Worker not supported')
+  }
+  </script>
+</body>
+</html>

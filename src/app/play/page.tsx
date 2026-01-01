@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment, @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps, no-console, @next/next/no-img-element */
 
 'use client';
-import { Heart } from 'lucide-react';
+import { Download, Heart } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
@@ -29,6 +29,7 @@ import { SearchResult } from '@/lib/types';
 import { getRequestTimeout, getVideoResolutionFromM3u8 } from '@/lib/utils';
 
 import DanmakuSelector from '@/components/DanmakuSelector';
+import DownloadManager from '@/components/DownloadManager';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import { triggerGlobalError } from '@/components/GlobalErrorIndicator';
 import PageLayout from '@/components/PageLayout';
@@ -68,6 +69,9 @@ function PlayPageClient() {
 
   // 收藏状态
   const [favorited, setFavorited] = useState(false);
+
+  // 下载管理器状态
+  const [showDownloadManager, setShowDownloadManager] = useState(false);
 
   // 跳过片头片尾配置
   const [skipConfig, setSkipConfig] = useState<{
@@ -283,7 +287,7 @@ function PlayPageClient() {
     MARGIN: {},
     SPEED: {},
     COLOR: [],
-    beforeEmit(danmu: any) {
+    beforeEmit(_danmu: any) {
       return new Promise((resolve) => {
         setTimeout(() => {
           resolve(true);
@@ -1895,7 +1899,9 @@ function PlayPageClient() {
           if (danmukuPluginInstanceRef.current) {
             try {
               danmukuPluginInstanceRef.current.config(danmakuConfigRef.current);
-            } catch (_) {}
+            } catch (_) {
+              // ignore
+            }
           }
         }
 
@@ -1912,7 +1918,9 @@ function PlayPageClient() {
               artPlayerRef.current.fullscreen = true;
             }, 0);
           }
-        } catch (_) {}
+        } catch (_) {
+          // ignore
+        }
       });
 
       // 监听播放状态变化，控制 Wake Lock
@@ -2398,6 +2406,16 @@ function PlayPageClient() {
                 >
                   <FavoriteIcon filled={favorited} />
                 </button>
+                {/* 下载管理器按钮 */}
+                {videoUrl && (
+                  <button
+                    onClick={() => setShowDownloadManager(true)}
+                    className='ml-3 flex-shrink-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 hover:scale-[1.1] transition-all duration-300 ease-out shadow-md'
+                    title='下载视频'
+                  >
+                    <Download className='h-4 w-4' />
+                  </button>
+                )}
                 {/* 豆瓣链接按钮 */}
                 {videoDoubanId !== 0 && (
                   <a
@@ -2455,6 +2473,18 @@ function PlayPageClient() {
           </div>
         </div>
       </div>
+
+      {/* 下载管理器弹窗 */}
+      <DownloadManager
+        isOpen={showDownloadManager}
+        onClose={() => setShowDownloadManager(false)}
+        initialUrl={videoUrl || ''}
+        initialTitle={`${videoTitle}${
+          totalEpisodes > 1
+            ? `_${detail?.episodes_titles?.[currentEpisodeIndex] || `第${currentEpisodeIndex + 1}集`}`
+            : ''
+        }`}
+      />
     </PageLayout>
   );
 }

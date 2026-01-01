@@ -13,8 +13,8 @@ import { NavigationLoadingIndicator } from '../components/NavigationLoadingIndic
 import { NavigationLoadingProvider } from '../components/NavigationLoadingProvider';
 import { SiteProvider } from '../components/SiteProvider';
 import SubscriptionAutoUpdate from '../components/SubscriptionAutoUpdate';
-import UserOnlineUpdate from '../components/UserOnlineUpdate';
 import { ThemeProvider } from '../components/ThemeProvider';
+import UserOnlineUpdate from '../components/UserOnlineUpdate';
 
 export const runtime = 'edge';
 
