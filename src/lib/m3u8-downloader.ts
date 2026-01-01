@@ -298,10 +298,27 @@ export async function downloadM3U8Video(
   task: M3U8Task,
   onProgress?: (progress: DownloadProgress) => void,
   signal?: AbortSignal,
-  concurrency = 6 // 默认6个并发
+  concurrency = 6, // 默认6个并发
+  useStreamSaver = false // 是否使用边下边存
 ): Promise<void> {
   const { startSegment, endSegment } = task.rangeDownload;
   const totalSegments = endSegment - startSegment + 1;
+  
+  // 流式写入器（边下边存模式）
+  let writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  
+  if (useStreamSaver) {
+    try {
+      const { createWriteStream } = await import('./stream-saver');
+      const filename = `${task.title}.${task.type === 'MP4' ? 'mp4' : 'ts'}`;
+      const stream = createWriteStream(filename);
+      writer = stream.getWriter();
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('创建流式写入器失败，降级为普通下载:', error);
+      writer = null;
+    }
+  }
   
   // 使用 Map 保存下载的片段（key 是片段索引，value 是数据）
   const segmentsMap = new Map<number, ArrayBuffer>();
@@ -327,7 +344,20 @@ export async function downloadM3U8Video(
         segmentData = aesDecrypt(segmentData, task.aesConf.key, task.aesConf.iv);
       }
 
-      segmentsMap.set(index, segmentData);
+      // 如果使用边下边存，立即写入流
+      if (writer) {
+        try {
+          await writer.write(new Uint8Array(segmentData));
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error(`片段 ${index + 1} 写入流失败:`, error);
+          throw error;
+        }
+      } else {
+        // 普通模式：保存到内存
+        segmentsMap.set(index, segmentData);
+      }
+      
       completedCount++;
       task.finishNum++;
 
@@ -375,9 +405,43 @@ export async function downloadM3U8Video(
     workers.push(processQueue());
   }
 
-  // 等待所有worker完成
-  await Promise.all(workers);
+  try {
+    // 等待所有worker完成
+    await Promise.all(workers);
 
+    // 边下边存模式：关闭流
+    if (writer) {
+      try {
+        await writer.close();
+        
+        onProgress?.({
+          current: completedCount,
+          total: totalSegments,
+          percentage: 100,
+          status: 'done',
+          message: '下载完成！',
+        });
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('关闭流失败:', error);
+        throw error;
+      }
+      return;
+    }
+  } catch (error) {
+    // 如果是中止下载，需要关闭流以显示浏览器取消状态
+    if (writer) {
+      try {
+        await writer.abort();
+      } catch (abortError) {
+        // eslint-disable-next-line no-console
+        console.error('中止流失败:', abortError);
+      }
+    }
+    throw error;
+  }
+
+  // 普通模式：合并并下载
   if (segmentsMap.size === 0) {
     throw new Error('没有成功下载的片段');
   }

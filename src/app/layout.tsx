@@ -9,10 +9,11 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 import { getConfig } from '@/lib/config';
 
 import ConditionalNav from '../components/ConditionalNav';
-import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import GlobalDownloadManager from '../components/GlobalDownloadManager';
+import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { NavigationLoadingIndicator } from '../components/NavigationLoadingIndicator';
 import { NavigationLoadingProvider } from '../components/NavigationLoadingProvider';
+import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
 import { SiteProvider } from '../components/SiteProvider';
 import SubscriptionAutoUpdate from '../components/SubscriptionAutoUpdate';
 import { ThemeProvider } from '../components/ThemeProvider';
@@ -116,6 +117,7 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ServiceWorkerRegistration />
           <NavigationLoadingProvider>
             <SiteProvider siteName={siteName} announcement={announcement}>
               <NavigationLoadingIndicator />

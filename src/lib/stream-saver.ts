@@ -64,11 +64,12 @@ function makeIframe(src: string): Transporter {
   iframe.name = 'iframe'
   document.body.appendChild(iframe)
   
-  return {
+  const transporter: Transporter = {
     frame: iframe,
     loaded: false,
     isIframe: true,
     remove() {
+      window.removeEventListener('message', onReady)
       document.body.removeChild(iframe)
     },
     postMessage(data: unknown, targetOrigin: string, transfer?: Transferable[]) {
@@ -78,6 +79,22 @@ function makeIframe(src: string): Transporter {
       iframe.addEventListener(type, listener, options)
     }
   }
+  
+  // 监听来自 iframe 的 ready 消息
+  const onReady = (event: MessageEvent) => {
+    if (event.data === 'stream-saver-ready' && event.source === iframe.contentWindow) {
+      transporter.loaded = true
+      window.removeEventListener('message', onReady)
+      
+      // 触发 load 事件
+      const loadEvent = new Event('load')
+      iframe.dispatchEvent(loadEvent)
+    }
+  }
+  
+  window.addEventListener('message', onReady)
+  
+  return transporter
 }
 
 // 创建 popup
@@ -125,6 +142,7 @@ export function createWriteStream(filename: string) {
   let ts: TransformStream<Uint8Array, Uint8Array> | null = null
 
   if (!useBlobFallback) {
+    
     // 创建中间传输器
     middleTransporter = middleTransporter || (
       isSecureContext 

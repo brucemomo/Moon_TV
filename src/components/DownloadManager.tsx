@@ -24,6 +24,7 @@ interface DownloadTask {
     rangeMode: boolean;
     startSegment: number;
     endSegment: number;
+    useStreamSaver?: boolean;
     parsedTask?: M3U8Task;
   };
 }
@@ -38,6 +39,17 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
   const [tasks, setTasks] = useState<DownloadTask[]>([]);
   // 添加下载弹窗状态
   const [showAddModal, setShowAddModal] = useState(false);
+  // 使用 ref 保存最新的 tasks，用于事件处理器
+  const tasksRef = useRef<DownloadTask[]>([]);
+  // 追踪是否已经处理过自动恢复
+  const hasAutoResumed = useRef(false);
+  // 标记页面是否正在卸载
+  const isUnloading = useRef(false);
+  
+  // 同步 tasks 到 ref
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   // 从 localStorage 加载任务
   useEffect(() => {
@@ -46,13 +58,22 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
       if (saved) {
         try {
           const savedTasks = JSON.parse(saved);
-          setTasks(savedTasks.map((t: DownloadTask) => ({ 
-            ...t, 
-            // 刷新页面时，将所有正在下载的任务改为暂停状态，并标记需要自动恢复
-            status: t.status === 'downloading' ? 'paused' : t.status,
-            autoResume: t.status === 'downloading', // 标记是否需要自动恢复
-            abortController: undefined 
-          })));
+          
+          const processedTasks = savedTasks.map((t: DownloadTask & { _originalStatus?: string }) => {
+            // 使用 _originalStatus 判断是否需要自动恢复
+            const wasDownloading = t._originalStatus === 'downloading' || t.status === 'downloading';
+            const { _originalStatus, ...taskWithoutOriginal } = t;
+            
+            return {
+              ...taskWithoutOriginal,
+              // 如果之前正在下载，设为暂停并标记自动恢复
+              status: wasDownloading ? 'paused' : t.status,
+              autoResume: wasDownloading,
+              abortController: undefined 
+            };
+          });
+          
+          setTasks(processedTasks);
         } catch {
           // 忽略解析错误
         }
@@ -62,19 +83,25 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
 
   // 自动恢复因刷新页面而暂停的下载任务
   useEffect(() => {
+    // 只执行一次自动恢复
+    if (hasAutoResumed.current) return;
+    
     const tasksToResume = tasks.filter(t => t.autoResume && t.status === 'paused');
+    
     if (tasksToResume.length > 0) {
-      // 清除 autoResume 标记
-      setTasks(prev => prev.map(t => ({ ...t, autoResume: false })));
+      hasAutoResumed.current = true;
       
       // 延迟一点时间后开始恢复下载，确保组件已完全加载
       setTimeout(() => {
         tasksToResume.forEach(task => {
           resumeTask(task.id);
         });
+        
+        // 清除 autoResume 标记
+        setTasks(prev => prev.map(t => ({ ...t, autoResume: false })));
       }, 500);
     }
-  }, [tasks.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 保存任务到 localStorage
   useEffect(() => {
@@ -88,7 +115,10 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
           rangeMode: config.rangeMode,
           startSegment: config.startSegment,
           endSegment: config.endSegment,
+          useStreamSaver: config.useStreamSaver,
         } : undefined,
+        // 保存原始状态，用于恢复时判断
+        _originalStatus: rest.status,
       }));
       localStorage.setItem('downloadTasks', JSON.stringify(tasksToSave));
       
@@ -98,6 +128,27 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
       }
     }
   }, [tasks]);
+
+  // 页面卸载/刷新时取消所有正在下载的任务
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // 标记页面正在卸载
+      isUnloading.current = true;
+      
+      // 使用 ref 获取最新的 tasks
+      tasksRef.current.forEach(task => {
+        if (task.status === 'downloading' && task.abortController) {
+          task.abortController.abort();
+        }
+      });
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []); // 空依赖数组，避免重复绑定/解绑
 
   // 执行下载任务（核心下载逻辑）
   const executeDownload = useCallback(async (
@@ -109,7 +160,7 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
     rangeMode: boolean,
     startSegment: number,
     endSegment: number,
-    _useStreamSaver = false
+    useStreamSaver = false
   ) => {
     try {
       const downloadTask = { ...parsedTask };
@@ -139,7 +190,8 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
           }));
         },
         controller.signal,
-        concurrency
+        concurrency,
+        useStreamSaver
       );
       
       // 确保最终状态为已完成（如果进度回调没有正确设置）
@@ -151,13 +203,14 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
       }));
     } catch (error) {
       if (error instanceof Error && error.message === '下载已取消') {
-        // eslint-disable-next-line no-console
-        console.log('用户取消下载');
-        setTasks(prev => prev.map(t => 
-          t.id === taskId 
-            ? { ...t, status: 'paused' as const, abortController: undefined }
-            : t
-        ));
+        // 如果是页面卸载导致的取消，不更新状态
+        if (!isUnloading.current) {
+          setTasks(prev => prev.map(t => 
+            t.id === taskId 
+              ? { ...t, status: 'paused' as const, abortController: undefined }
+              : t
+          ));
+        }
       } else {
         // eslint-disable-next-line no-console
         console.error('下载失败:', error);
@@ -200,6 +253,7 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
         rangeMode: config.rangeMode,
         startSegment: config.startSegment,
         endSegment: config.endSegment,
+        useStreamSaver: config.useStreamSaver,
         parsedTask: config.parsedTask,
       },
       abortController: controller,
@@ -226,7 +280,45 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
   useEffect(() => {
     const handleAddTaskEvent = (event: CustomEvent) => {
       const config = event.detail;
-      addTaskFromConfig(config);
+      const taskId = Date.now().toString();
+      const controller = new AbortController();
+
+      // 创建新任务并直接开始下载
+      const newTask: DownloadTask = {
+        id: taskId,
+        url: config.url,
+        title: config.title,
+        status: 'downloading',
+        progress: 0,
+        current: 0,
+        total: config.parsedTask.tsUrlList.length,
+        config: {
+          downloadType: config.downloadType,
+          concurrency: config.concurrency,
+          rangeMode: config.rangeMode,
+          startSegment: config.startSegment,
+          endSegment: config.endSegment,
+          useStreamSaver: config.useStreamSaver,
+          parsedTask: config.parsedTask,
+        },
+        abortController: controller,
+      };
+
+      // 添加到任务列表
+      setTasks(prev => [...prev, newTask]);
+
+      // 立即开始下载
+      executeDownload(
+        taskId,
+        config.parsedTask,
+        controller,
+        config.downloadType,
+        config.concurrency,
+        config.rangeMode,
+        config.startSegment,
+        config.endSegment,
+        config.useStreamSaver
+      );
     };
 
     if (typeof window !== 'undefined') {
@@ -238,15 +330,16 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
         window.removeEventListener('addDownloadTask', handleAddTaskEvent as EventListener);
       }
     };
-  }, [addTaskFromConfig]);
+  }, [executeDownload]); // 直接依赖 executeDownload
 
   // 执行下载任务（从任务配置启动）
-  const startTaskDownload = async (taskId: string, parsedTask: M3U8Task) => {
-    const taskToDownload = tasks.find(t => t.id === taskId);
+  const startTaskDownload = useCallback(async (taskId: string, parsedTask: M3U8Task) => {
+    // 使用 tasksRef 获取最新的 tasks
+    const taskToDownload = tasksRef.current.find(t => t.id === taskId);
     if (!taskToDownload?.config) return;
 
     const controller = new AbortController();
-    const { downloadType, concurrency, rangeMode, startSegment, endSegment } = taskToDownload.config;
+    const { downloadType, concurrency, rangeMode, startSegment, endSegment, useStreamSaver } = taskToDownload.config;
     
     // 更新任务状态
     setTasks(prev => prev.map(t => 
@@ -255,34 +348,39 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
         : t
     ));
 
-    executeDownload(taskId, parsedTask, controller, downloadType, concurrency, rangeMode, startSegment, endSegment);
-  };
+    executeDownload(taskId, parsedTask, controller, downloadType, concurrency, rangeMode, startSegment, endSegment, useStreamSaver || false);
+  }, [executeDownload]);
 
   // 删除任务
-  const deleteTask = (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task?.abortController) {
-      task.abortController.abort();
-    }
-    setTasks(tasks.filter(t => t.id !== taskId));
-  };
+  const deleteTask = useCallback((taskId: string) => {
+    setTasks(prev => {
+      const task = prev.find(t => t.id === taskId);
+      if (task?.abortController) {
+        task.abortController.abort();
+      }
+      return prev.filter(t => t.id !== taskId);
+    });
+  }, []);
 
   // 暂停任务
-  const pauseTask = (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task?.abortController) {
-      task.abortController.abort();
-      setTasks(prev => prev.map(t => 
+  const pauseTask = useCallback((taskId: string) => {
+    setTasks(prev => {
+      const task = prev.find(t => t.id === taskId);
+      if (task?.abortController) {
+        task.abortController.abort();
+      }
+      return prev.map(t => 
         t.id === taskId 
           ? { ...t, status: 'paused' as const, abortController: undefined }
           : t
-      ));
-    }
-  };
+      );
+    });
+  }, []);
 
   // 继续下载任务
-  const resumeTask = async (taskId: string) => {
-    const taskToResume = tasks.find(t => t.id === taskId);
+  const resumeTask = useCallback(async (taskId: string) => {
+    // 使用 tasksRef 获取最新的 tasks
+    const taskToResume = tasksRef.current.find(t => t.id === taskId);
     if (!taskToResume || taskToResume.status === 'downloading') return;
 
     // 如果有保存的解析任务配置，直接使用
@@ -307,6 +405,7 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
                 rangeMode: t.config?.rangeMode || false,
                 startSegment: t.config?.startSegment || 1,
                 endSegment: t.config?.endSegment || parsedTask.tsUrlList.length,
+                useStreamSaver: t.config?.useStreamSaver || false,
                 parsedTask,
               }
             }
@@ -323,40 +422,45 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
           : t
       ));
     }
-  };
+  }, [startTaskDownload]);
 
   // 全部暂停
-  const pauseAllTasks = () => {
-    tasks.forEach(task => {
-      if (task.status === 'downloading' && task.abortController) {
-        task.abortController.abort();
-      }
+  const pauseAllTasks = useCallback(() => {
+    setTasks(prev => {
+      prev.forEach(task => {
+        if (task.status === 'downloading' && task.abortController) {
+          task.abortController.abort();
+        }
+      });
+      return prev.map(t => 
+        t.status === 'downloading' 
+          ? { ...t, status: 'paused' as const, abortController: undefined }
+          : t
+      );
     });
-    setTasks(prev => prev.map(t => 
-      t.status === 'downloading' 
-        ? { ...t, status: 'paused' as const, abortController: undefined }
-        : t
-    ));
-  };
+  }, []);
 
   // 全部开始
-  const startAllTasks = () => {
-    tasks.forEach(task => {
+  const startAllTasks = useCallback(() => {
+    // 使用 tasksRef 获取最新的 tasks，避免闭包问题
+    tasksRef.current.forEach(task => {
       if (task.status === 'waiting' || task.status === 'paused' || task.status === 'error') {
         resumeTask(task.id);
       }
     });
-  };
+  }, [resumeTask]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 清空所有任务
-  const clearAllTasks = () => {
-    tasks.forEach(task => {
-      if (task.abortController) {
-        task.abortController.abort();
-      }
+  const clearAllTasks = useCallback(() => {
+    setTasks(prev => {
+      prev.forEach(task => {
+        if (task.abortController) {
+          task.abortController.abort();
+        }
+      });
+      return [];
     });
-    setTasks([]);
-  };
+  }, []);
 
   if (!isOpen) return null;
 
