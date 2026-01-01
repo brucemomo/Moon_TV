@@ -28,8 +28,8 @@ import {
 import { SearchResult } from '@/lib/types';
 import { getRequestTimeout, getVideoResolutionFromM3u8 } from '@/lib/utils';
 
+import AddDownloadModal from '@/components/AddDownloadModal';
 import DanmakuSelector from '@/components/DanmakuSelector';
-import DownloadManager from '@/components/DownloadManager';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import { triggerGlobalError } from '@/components/GlobalErrorIndicator';
 import PageLayout from '@/components/PageLayout';
@@ -70,8 +70,8 @@ function PlayPageClient() {
   // 收藏状态
   const [favorited, setFavorited] = useState(false);
 
-  // 下载管理器状态
-  const [showDownloadManager, setShowDownloadManager] = useState(false);
+  // 添加下载弹窗状态
+  const [showAddDownload, setShowAddDownload] = useState(false);
 
   // 跳过片头片尾配置
   const [skipConfig, setSkipConfig] = useState<{
@@ -2406,10 +2406,10 @@ function PlayPageClient() {
                 >
                   <FavoriteIcon filled={favorited} />
                 </button>
-                {/* 下载管理器按钮 */}
+                {/* 下载按钮 */}
                 {videoUrl && (
                   <button
-                    onClick={() => setShowDownloadManager(true)}
+                    onClick={() => setShowAddDownload(true)}
                     className='ml-3 flex-shrink-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 hover:scale-[1.1] transition-all duration-300 ease-out shadow-md'
                     title='下载视频'
                   >
@@ -2474,16 +2474,24 @@ function PlayPageClient() {
         </div>
       </div>
 
-      {/* 下载管理器弹窗 */}
-      <DownloadManager
-        isOpen={showDownloadManager}
-        onClose={() => setShowDownloadManager(false)}
+      {/* 添加下载弹窗 */}
+      <AddDownloadModal
+        isOpen={showAddDownload}
+        onClose={() => setShowAddDownload(false)}
+        onAddTask={(config) => {
+          // 触发自定义事件，通知导航栏的下载管理器
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('addDownloadTask', { detail: config }));
+          }
+          setShowAddDownload(false);
+        }}
         initialUrl={videoUrl || ''}
         initialTitle={`${videoTitle}${
           totalEpisodes > 1
             ? `_${detail?.episodes_titles?.[currentEpisodeIndex] || `第${currentEpisodeIndex + 1}集`}`
             : ''
         }`}
+        skipConfig={skipConfig}
       />
     </PageLayout>
   );

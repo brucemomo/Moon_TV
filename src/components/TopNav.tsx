@@ -2,10 +2,10 @@
 
 'use client';
 
-import { Cat, Clover, Film, History, Home, Search, Star, Trash2, Tv, X } from 'lucide-react';
+import { Cat, Clover, Download, Film, History, Home, Search, Star, Trash2, Tv, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 import { getCustomCategories } from '@/lib/config.client';
 import {
@@ -16,6 +16,7 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 
+import DownloadManager from './DownloadManager';
 import { useNavigationLoading } from './NavigationLoadingProvider';
 import SearchSuggestions from './SearchSuggestions';
 import { useSite } from './SiteProvider';
@@ -27,14 +28,14 @@ interface TopNavProps {
   activePath?: string;
 }
 
-const TopNav = ({ activePath = '/' }: TopNavProps) => {
+const TopNav = ({ activePath }: TopNavProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { siteName } = useSite();
   const { startLoading } = useNavigationLoading();
 
-  const [active, setActive] = useState(activePath);
+  const [active, setActive] = useState(activePath || '/');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -52,6 +53,58 @@ const TopNav = ({ activePath = '/' }: TopNavProps) => {
   // 简洁模式搜索栏展开状态
   const [showSearchBar, setShowSearchBar] = useState(false);
   const searchBarRef = useRef<HTMLDivElement>(null);
+
+  // 下载管理器状态
+  const [showDownloadManager, setShowDownloadManager] = useState(false);
+  const [downloadTaskCount, setDownloadTaskCount] = useState(0);
+
+  // 监听下载任务变化，更新角标
+  useEffect(() => {
+    const updateTaskCount = () => {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('downloadTasks');
+        if (saved) {
+          try {
+            const tasks = JSON.parse(saved);
+            // 统计未完成的任务数量（下载中、暂停、等待、错误）
+            const activeCount = tasks.filter(
+              (t: { status: string }) => 
+                t.status === 'downloading' || 
+                t.status === 'paused' || 
+                t.status === 'waiting' || 
+                t.status === 'error'
+            ).length;
+            setDownloadTaskCount(activeCount);
+          } catch {
+            setDownloadTaskCount(0);
+          }
+        } else {
+          setDownloadTaskCount(0);
+        }
+      }
+    };
+
+    // 初始加载
+    updateTaskCount();
+
+    // 监听 localStorage 变化
+    const handleStorageChange = () => {
+      updateTaskCount();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+      // 自定义事件：当任务列表更新时
+      window.addEventListener('downloadTasksUpdated', handleStorageChange as EventListener);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('downloadTasksUpdated', handleStorageChange as EventListener);
+      }
+    };
+  }, []);
 
   // 检查是否启用简洁模式
   const [simpleMode, setSimpleMode] = useState(false);
@@ -388,6 +441,7 @@ const TopNav = ({ activePath = '/' }: TopNavProps) => {
   );
 
   return (
+    <>
     <header className='hidden md:block sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm dark:bg-gray-900/80 dark:border-gray-700/50'>
       <div className='mx-auto px-6 h-16 flex items-center justify-between gap-6'>
         {/* Logo */}
@@ -483,13 +537,34 @@ const TopNav = ({ activePath = '/' }: TopNavProps) => {
 
         {/* 右侧按钮组 */}
         <div className='flex items-center gap-2 flex-shrink-0 mr-9'>
+          <button
+            onClick={() => setShowDownloadManager(true)}
+            className='p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative'
+            title='下载管理器'
+          >
+            <Download className='h-5 w-5' />
+            {downloadTaskCount > 0 && (
+              <span className='absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center'>
+                {downloadTaskCount > 99 ? '99+' : downloadTaskCount}
+              </span>
+            )}
+          </button>
           <ThemeToggle />
           <UserMenu />
         </div>
       </div>
     </header>
+
+    {/* 下载管理器 - 在 header 外部渲染，避免堆叠上下文问题 */}
+    <DownloadManager
+      isOpen={showDownloadManager}
+      onClose={() => setShowDownloadManager(false)}
+    />
+    </>
   );
 };
 
-export default TopNav;
+// 使用 React.memo 优化，避免父组件更新时导致不必要的重新渲染
+// 由于 TopNav 主要依赖内部 hooks 和全局状态，不需要 props 比较函数
+export default memo(TopNav);
 

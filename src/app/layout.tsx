@@ -9,11 +9,14 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 import { getConfig } from '@/lib/config';
 
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
+import MobileBottomNav from '../components/MobileBottomNav';
+import MobileHeader from '../components/MobileHeader';
 import { NavigationLoadingIndicator } from '../components/NavigationLoadingIndicator';
 import { NavigationLoadingProvider } from '../components/NavigationLoadingProvider';
 import { SiteProvider } from '../components/SiteProvider';
 import SubscriptionAutoUpdate from '../components/SubscriptionAutoUpdate';
 import { ThemeProvider } from '../components/ThemeProvider';
+import TopNav from '../components/TopNav';
 import UserOnlineUpdate from '../components/UserOnlineUpdate';
 
 export const runtime = 'edge';
@@ -118,7 +121,30 @@ export default async function RootLayout({
             <SiteProvider siteName={siteName} announcement={announcement}>
               <NavigationLoadingIndicator />
               <UserOnlineUpdate />
-              {children}
+              
+              {/* 移动端头部 - 固定在根布局，避免页面切换时重新渲染 */}
+              <MobileHeader showBackButton={false} />
+              
+              {/* 桌面端顶部导航栏 - 固定在根布局，避免页面切换时重新渲染 */}
+              <TopNav />
+              
+              {/* 页面内容 */}
+              <div className='relative w-full'>
+                <main
+                  className='flex-1 mb-14 md:mb-0'
+                  style={{
+                    paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
+                  }}
+                >
+                  {children}
+                </main>
+              </div>
+              
+              {/* 移动端底部导航 - 固定在根布局，避免页面切换时重新渲染 */}
+              <div className='md:hidden'>
+                <MobileBottomNav />
+              </div>
+              
               <GlobalErrorIndicator />
               {autoUpdateEnabled && <SubscriptionAutoUpdate />}
             </SiteProvider>
