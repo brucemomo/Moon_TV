@@ -16,7 +16,6 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 
-import DownloadManager from './DownloadManager';
 import { useNavigationLoading } from './NavigationLoadingProvider';
 import SearchSuggestions from './SearchSuggestions';
 import { useSite } from './SiteProvider';
@@ -54,8 +53,7 @@ const TopNav = ({ activePath }: TopNavProps) => {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const searchBarRef = useRef<HTMLDivElement>(null);
 
-  // 下载管理器状态
-  const [showDownloadManager, setShowDownloadManager] = useState(false);
+  // 下载任务数量统计
   const [downloadTaskCount, setDownloadTaskCount] = useState(0);
 
   // 监听下载任务变化，更新角标
@@ -538,7 +536,11 @@ const TopNav = ({ activePath }: TopNavProps) => {
         {/* 右侧按钮组 */}
         <div className='flex items-center gap-2 flex-shrink-0 mr-9'>
           <button
-            onClick={() => setShowDownloadManager(true)}
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event('showDownloadManager'));
+              }
+            }}
             className='p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative'
             title='下载管理器'
           >
@@ -554,12 +556,6 @@ const TopNav = ({ activePath }: TopNavProps) => {
         </div>
       </div>
     </header>
-
-    {/* 下载管理器 - 在 header 外部渲染，避免堆叠上下文问题 */}
-    <DownloadManager
-      isOpen={showDownloadManager}
-      onClose={() => setShowDownloadManager(false)}
-    />
     </>
   );
 };

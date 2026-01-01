@@ -1,7 +1,7 @@
 'use client';
 
 import { Download, Pause, Play, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { downloadM3U8Video, DownloadProgress, M3U8Task, parseM3U8 } from '@/lib/m3u8-downloader';
 
@@ -111,7 +111,6 @@ const DownloadManager = ({ isOpen, onClose }: DownloadManagerProps) => {
     endSegment: number,
     _useStreamSaver = false
   ) => {
-
     try {
       const downloadTask = { ...parsedTask };
       downloadTask.type = downloadType;

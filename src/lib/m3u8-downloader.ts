@@ -271,16 +271,13 @@ export function triggerDownload(blob: Blob, filename: string, type: 'TS' | 'MP4'
   a.download = `${filename}.${type.toLowerCase()}`;
   a.style.display = 'none';
   document.body.appendChild(a);
+  a.click();
   
-  // 使用 setTimeout 确保只触发一次点击
+  // 延迟清理，确保下载已开始
   setTimeout(() => {
-    a.click();
-    // 延迟移除元素和释放URL，确保下载已开始
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-  }, 0);
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
 }
 
 /**
