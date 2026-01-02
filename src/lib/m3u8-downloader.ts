@@ -27,6 +27,7 @@ export interface M3U8Task {
     endSegment: number;
     targetSegment: number;
   };
+  totalSize?: number;
 }
 
 /**
@@ -147,6 +148,7 @@ export async function parseM3U8(url: string, depth = 0): Promise<M3U8Task> {
       endSegment: 0,
       targetSegment: 0,
     },
+    totalSize: 0,
   };
 
   // 提取 ts 视频片段地址
@@ -163,6 +165,11 @@ export async function parseM3U8(url: string, depth = 0): Promise<M3U8Task> {
 
   task.rangeDownload.endSegment = task.tsUrlList.length;
   task.rangeDownload.targetSegment = task.tsUrlList.length;
+
+  // 估算总文件大小（基于时长和比特率）
+  // 假设平均比特率为 2Mbps (TS 流媒体的常见值)
+  const estimatedBitrate = 2 * 1024 * 1024 / 8; // 2Mbps 转为字节/秒
+  task.totalSize = Math.round(task.durationSecond * estimatedBitrate);
 
   // 检测 AES 加密
   if (m3u8Str.includes('#EXT-X-KEY')) {
@@ -309,10 +316,30 @@ export async function downloadM3U8Video(
   
   if (useStreamSaver) {
     try {
-      const { createWriteStream } = await import('./stream-saver');
+      // 尝试使用自适应流式下载
+      const { createAdaptiveWriteStream } = await import('./stream-saver-fallback');
       const filename = `${task.title}.${task.type === 'MP4' ? 'mp4' : 'ts'}`;
-      const stream = createWriteStream(filename);
-      writer = stream.getWriter();
+      
+      // 估算文件大小（如果可能）
+      const estimatedSize = task.totalSize || undefined;
+      
+      try {
+        const stream = await createAdaptiveWriteStream(filename, estimatedSize);
+        writer = stream.getWriter();
+        // eslint-disable-next-line no-console
+        console.log('✅ 使用边下边存模式下载');
+      } catch (error: any) {
+        // 如果返回 USE_SERVICE_WORKER，使用原始实现
+        if (error.message === 'USE_SERVICE_WORKER') {
+          const { createWriteStream } = await import('./stream-saver');
+          const stream = createWriteStream(filename);
+          writer = stream.getWriter();
+          // eslint-disable-next-line no-console
+          console.log('✅ 使用 Service Worker 边下边存模式下载');
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('创建流式写入器失败，降级为普通下载:', error);
